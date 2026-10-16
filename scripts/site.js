@@ -72,6 +72,7 @@ function homePage() {
       ...cases[2],
       image: "featured-loginom.png",
       mobile: cases[4],
+      href: cases[5].href,
       tooltip: {
         title: "Лендинг мероприятия",
         description: "Обновил стиль события, добавил узнаваемые атрибуты для дальнейшего масштабирования визуала и сделал адаптивные макеты.",
