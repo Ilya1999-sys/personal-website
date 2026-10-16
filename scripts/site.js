@@ -51,23 +51,35 @@ function makeCaseCard(item, featured = false, index = 0) {
   const title = escapeHtml(item.title);
   const tagNames = [...new Set([...item.categories.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...item.tags])];
   const tags = tagNames.slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
-  return `<a class="${featured ? `featured-card featured-card--${index + 1}` : "case-card"}" href="${escapeHtml(item.href)}" target="_blank" rel="noopener noreferrer" data-featured="${featured}">
-    <img src="/images/${escapeHtml(item.image)}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" />
+  const mobile = item.mobile || item;
+  const cardClass = featured ? `featured-card featured-card--${index + 1}` : "case-card";
+  return `<a class="${cardClass}" href="${escapeHtml(item.href)}"${featured && item.mobile ? ` data-desktop-href="${escapeHtml(item.href)}" data-mobile-href="${escapeHtml(mobile.href)}"` : ""} target="_blank" rel="noopener noreferrer" data-featured="${featured}">
+    <picture>${featured && mobile.image !== item.image ? `<source media="(max-width: 767px)" srcset="/images/${escapeHtml(mobile.image)}" />` : ""}<img src="/images/${escapeHtml(item.image)}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" /></picture>
+    ${featured ? `<div class="featured-card__mobile-copy"><h3>${escapeHtml(mobile.title)}</h3><p>${escapeHtml(mobile.description)}</p><div class="tag-list">${[...new Set([...mobile.categories.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...mobile.tags])].slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div></div>` : ""}
     ${featured ? `<span class="featured-card__label">${title}</span>` : `<div class="case-card__body"><h3>${title}</h3><p>${escapeHtml(item.description)}</p><div class="tag-list">${tags}</div></div>`}
     ${featured ? `<span class="case-tooltip" aria-hidden="true"><strong>${title}</strong><span>${escapeHtml(item.description)}</span><span class="tag-list">${tags}</span></span>` : ""}
   </a>`;
 }
 
 function homePage() {
-  const featured = [cases[0], cases[1], { ...cases[2], image: "featured-loginom.png" }, cases[4]];
-  const years = experience.map(({ year, entries }) => `<div class="timeline-year">
-    <h3>${escapeHtml(year)}</h3>
-    <div class="experience-grid">${entries.map((entry) => `<article class="experience-card ${entry.kind === "course" ? "experience-card--course" : ""}">
+  const featured = [
+    cases[0], cases[1],
+    { ...cases[2], image: "featured-loginom.png", mobile: cases[4] },
+    { ...cases[4], mobile: cases[5] },
+  ];
+  const makeExperienceCard = (entry, extraClass = "") => `<article class="experience-card ${entry.kind === "course" ? "experience-card--course" : ""} ${extraClass}">
       <div class="experience-card__meta"><span>${escapeHtml(entry.company)}</span><span>${escapeHtml(entry.period)}</span></div>
       <h4>${escapeHtml(entry.title)}</h4>
       <p>${escapeHtml(entry.text)}</p>
-    </article>`).join("")}</div>
+    </article>`;
+  const years = experience.map(({ year, entries }) => ({ year, entries: entries.filter((entry) => entry.company !== "Loginom" && entry.company !== "Tilda Education") }));
+  const yearRows = (rows, extraClass = "") => rows.map(({ year, entries }) => `<div class="timeline-year ${extraClass} timeline-year--${year}">
+    <h3>${escapeHtml(year)}</h3><div class="experience-grid">${entries.map((entry) => makeExperienceCard(entry)).join("")}</div>
   </div>`).join("");
+  const earlyYears = years.filter(({ year }) => Number(year) <= 2023);
+  const lateYears = years.filter(({ year }) => Number(year) >= 2024);
+  const tilda = experience.flatMap(({ entries }) => entries).find((entry) => entry.company === "Tilda Education");
+  const loginom = experience.flatMap(({ entries }) => entries).find((entry) => entry.company === "Loginom");
   const marqueeItems = programs.map((program) => `<span class="marquee-item">${escapeHtml(program)}<i aria-hidden="true"></i></span>`).join("");
   return `<main class="page-content home-content">
     <section class="hero-panel panel">
@@ -81,13 +93,16 @@ function homePage() {
 
     <section class="content-section featured-section" aria-labelledby="featured-title">
       <h2 class="section-title" id="featured-title">Кейсы</h2>
-      <div class="featured-grid">${featured.map((item, i) => makeCaseCard(item, true, i)).join("")}</div>
+      <div class="featured-stage"><div class="featured-grid"><div class="featured-track">${featured.map((item, i) => makeCaseCard(item, true, i)).join("")}</div></div></div>
       <a class="button button-primary all-cases" href="/cases/">Смотреть все кейсы</a>
     </section>
 
     <section class="content-section experience-section" aria-labelledby="experience-title">
       <h2 class="section-title" id="experience-title">5 лет в дизайне</h2>
-      <div class="timeline">${years}</div>
+      <div class="timeline">
+        <div class="timeline-early">${yearRows(earlyYears)}</div>
+        <div class="timeline-late">${yearRows(lateYears, "timeline-year--late")}${makeExperienceCard(tilda, "experience-card--tilda")}${makeExperienceCard(loginom, "experience-card--loginom")}</div>
+      </div>
     </section>
 
     <section class="about-section" aria-label="Немного обо мне">
@@ -154,9 +169,64 @@ document.querySelectorAll(".filter-button").forEach((button) => {
   });
 });
 
+const featuredCards = [...document.querySelectorAll(".featured-card")];
+const mobileFeatured = window.matchMedia("(max-width: 767px)");
+const syncFeaturedLinks = () => featuredCards.forEach((card) => {
+  const href = mobileFeatured.matches ? card.dataset.mobileHref : card.dataset.desktopHref;
+  if (href) card.href = href;
+});
+syncFeaturedLinks();
+mobileFeatured.addEventListener?.("change", syncFeaturedLinks);
+
+const featuredStage = document.querySelector(".featured-stage");
+const featuredGrid = document.querySelector(".featured-grid");
+const featuredTrack = document.querySelector(".featured-track");
+const wideFeatured = window.matchMedia("(min-width: 1920px)");
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+if (featuredStage && featuredGrid && featuredTrack && !reducedMotion.matches) {
+  let frame = 0;
+  const updateFeatured = () => {
+    frame = 0;
+    if (mobileFeatured.matches) {
+      featuredStage.style.height = "auto";
+      featuredTrack.style.transform = "";
+      featuredTrack.style.gridTemplateColumns = "";
+      return;
+    }
+    const wide = wideFeatured.matches;
+    const cards = [...featuredTrack.querySelectorAll(".featured-card")];
+    const width = featuredGrid.clientWidth;
+    const maxHeight = wide ? (width - 3 * 24) * 9 / 16 : width * 9 / 16;
+    featuredStage.style.height = `${window.innerHeight * 3 + maxHeight}px`;
+    const start = featuredStage.getBoundingClientRect().top + window.scrollY;
+    const range = Math.max(1, window.innerHeight * 3);
+    const progress = Math.max(0, Math.min(cards.length - 1, ((window.scrollY - start) / range) * (cards.length - 1)));
+    const active = Math.min(cards.length - 1, Math.floor(progress));
+    const blend = progress >= cards.length - 1 ? 0 : progress - active;
+    if (wide) {
+      const large = width - 3 * 250 - 3 * 24;
+      const sizes = cards.map((_, index) => index === active ? large + (250 - large) * blend : index === active + 1 ? 250 + (large - 250) * blend : 250);
+      featuredTrack.style.gridTemplateColumns = sizes.map((size) => `${Math.max(250, size)}px`).join(" ");
+      featuredTrack.style.transform = "";
+    } else {
+      featuredTrack.style.gridTemplateColumns = "";
+      featuredTrack.style.transform = `translateX(-${progress * (width + 24)}px)`;
+    }
+  };
+  const scheduleFeaturedUpdate = () => {
+    if (!frame) frame = requestAnimationFrame(updateFeatured);
+  };
+  window.addEventListener("scroll", scheduleFeaturedUpdate, { passive: true });
+  window.addEventListener("resize", scheduleFeaturedUpdate);
+  wideFeatured.addEventListener?.("change", scheduleFeaturedUpdate);
+  mobileFeatured.addEventListener?.("change", scheduleFeaturedUpdate);
+  scheduleFeaturedUpdate();
+}
+
 if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
   document.querySelectorAll(".featured-card").forEach((card) => {
     const tooltip = card.querySelector(".case-tooltip");
+    document.body.append(tooltip);
     const move = (x, y) => {
       const gap = 20;
       const box = tooltip.getBoundingClientRect();
@@ -166,16 +236,24 @@ if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
       tooltip.style.top = `${Math.max(12, top)}px`;
     };
     card.addEventListener("pointerenter", (event) => {
-      card.classList.add("is-hovered");
+      tooltip.style.display = "";
+      tooltip.classList.add("is-visible");
       move(event.clientX, event.clientY);
     });
     card.addEventListener("pointermove", (event) => move(event.clientX, event.clientY));
-    card.addEventListener("pointerleave", () => card.classList.remove("is-hovered"));
+    card.addEventListener("pointerleave", () => {
+      tooltip.classList.remove("is-visible");
+      tooltip.style.display = "none";
+    });
     card.addEventListener("focus", () => {
-      card.classList.add("is-hovered");
+      tooltip.style.display = "";
+      tooltip.classList.add("is-visible");
       const rect = card.getBoundingClientRect();
       move(rect.left + rect.width / 2, rect.top + rect.height / 2);
     });
-    card.addEventListener("blur", () => card.classList.remove("is-hovered"));
+    card.addEventListener("blur", () => {
+      tooltip.classList.remove("is-visible");
+      tooltip.style.display = "none";
+    });
   });
 }
