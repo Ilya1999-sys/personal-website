@@ -231,6 +231,23 @@ if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
   document.querySelectorAll(".featured-card").forEach((card) => {
     const tooltip = card.querySelector(".case-tooltip");
     document.body.append(tooltip);
+    let hideTimer = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    let hasPointerPosition = false;
+    const hide = () => {
+      window.clearTimeout(hideTimer);
+      hideTimer = 0;
+      tooltip.classList.remove("is-visible");
+      tooltip.style.display = "none";
+    };
+    const scheduleHide = () => {
+      if (!hideTimer) hideTimer = window.setTimeout(hide, 500);
+    };
+    const pointerIsOverCard = () => {
+      const rect = card.getBoundingClientRect();
+      return pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom;
+    };
     const move = (x, y) => {
       const gap = 20;
       const box = tooltip.getBoundingClientRect();
@@ -240,24 +257,35 @@ if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
       tooltip.style.top = `${Math.max(12, top)}px`;
     };
     card.addEventListener("pointerenter", (event) => {
+      window.clearTimeout(hideTimer);
+      hideTimer = 0;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      hasPointerPosition = true;
       tooltip.style.display = "";
       tooltip.classList.add("is-visible");
       move(event.clientX, event.clientY);
     });
-    card.addEventListener("pointermove", (event) => move(event.clientX, event.clientY));
-    card.addEventListener("pointerleave", () => {
-      tooltip.classList.remove("is-visible");
-      tooltip.style.display = "none";
+    card.addEventListener("pointermove", (event) => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      hasPointerPosition = true;
+      window.clearTimeout(hideTimer);
+      hideTimer = 0;
+      move(pointerX, pointerY);
     });
+    card.addEventListener("pointerleave", scheduleHide);
+    window.addEventListener("scroll", () => {
+      if (tooltip.classList.contains("is-visible") && hasPointerPosition && !pointerIsOverCard()) scheduleHide();
+    }, { passive: true });
     card.addEventListener("focus", () => {
+      window.clearTimeout(hideTimer);
+      hideTimer = 0;
       tooltip.style.display = "";
       tooltip.classList.add("is-visible");
       const rect = card.getBoundingClientRect();
       move(rect.left + rect.width / 2, rect.top + rect.height / 2);
     });
-    card.addEventListener("blur", () => {
-      tooltip.classList.remove("is-visible");
-      tooltip.style.display = "none";
-    });
+    card.addEventListener("blur", hide);
   });
 }
