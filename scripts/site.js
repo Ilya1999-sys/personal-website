@@ -51,20 +51,33 @@ function makeCaseCard(item, featured = false, index = 0) {
   const title = escapeHtml(item.title);
   const tagNames = [...new Set([...item.categories.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...item.tags])];
   const tags = tagNames.slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+  const tooltip = item.tooltip || item;
+  const tooltipTitle = escapeHtml(tooltip.title);
+  const tooltipDescription = escapeHtml(tooltip.description);
+  const tooltipTags = (tooltip.tags || tagNames).slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
   const mobile = item.mobile || item;
   const cardClass = featured ? `featured-card featured-card--${index + 1}` : "case-card";
   return `<a class="${cardClass}" href="${escapeHtml(item.href)}"${featured && item.mobile ? ` data-desktop-href="${escapeHtml(item.href)}" data-mobile-href="${escapeHtml(mobile.href)}"` : ""} target="_blank" rel="noopener noreferrer" data-featured="${featured}">
     <picture>${featured && mobile.image !== item.image ? `<source media="(max-width: 767px)" srcset="/images/${escapeHtml(mobile.image)}" />` : ""}<img src="/images/${escapeHtml(item.image)}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" /></picture>
     ${featured ? `<div class="featured-card__mobile-copy"><h3>${escapeHtml(mobile.title)}</h3><p>${escapeHtml(mobile.description)}</p><div class="tag-list">${[...new Set([...mobile.categories.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...mobile.tags])].slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div></div>` : ""}
     ${featured ? `<span class="featured-card__label">${title}</span>` : `<div class="case-card__body"><h3>${title}</h3><p>${escapeHtml(item.description)}</p><div class="tag-list">${tags}</div></div>`}
-    ${featured ? `<span class="case-tooltip" aria-hidden="true"><strong>${title}</strong><span>${escapeHtml(item.description)}</span><span class="tag-list">${tags}</span></span>` : ""}
+    ${featured ? `<span class="case-tooltip" aria-hidden="true"><strong>${tooltipTitle}</strong><span>${tooltipDescription}</span><span class="tag-list">${tooltipTags}</span></span>` : ""}
   </a>`;
 }
 
 function homePage() {
   const featured = [
     cases[0], cases[1],
-    { ...cases[2], image: "featured-loginom.png", mobile: cases[4] },
+    {
+      ...cases[2],
+      image: "featured-loginom.png",
+      mobile: cases[4],
+      tooltip: {
+        title: "Лендинг мероприятия",
+        description: "Обновил стиль события, добавил узнаваемые атрибуты для дальнейшего масштабирования визуала и сделал адаптивные макеты.",
+        tags: ["Веб-дизайн", "Стиль", "Адаптивы"],
+      },
+    },
     { ...cases[4], mobile: cases[5] },
   ];
   const makeExperienceCard = (entry, extraClass = "") => `<article class="experience-card ${entry.kind === "course" ? "experience-card--course" : ""} ${extraClass}">
