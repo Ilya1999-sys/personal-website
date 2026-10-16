@@ -1,0 +1,181 @@
+import { cases, categories, contactCards, experience, links, programs } from "./data.js";
+
+const root = document.querySelector("#site");
+const page = document.body.dataset.page || "home";
+const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+
+function icon(name) {
+  if (name === "telegram") return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#229ED9"/><path d="m9 19.1 20-7.7c.9-.3 1.7.2 1.4 1.5l-3.4 16.2c-.2 1.1-.9 1.4-1.8.9l-5.4-4-2.6 2.5c-.3.3-.5.5-1 .5l.4-5.5L27 14c.5-.4-.1-.7-.7-.3l-12.8 8.1-5.5-1.7c-1.2-.4-1.2-1.2 1-2Z" fill="#fff"/></svg>';
+  if (name === "email") return '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 11.5h30v19H5z" fill="#fff"/><path d="M5 12l15 12 15-12" fill="none" stroke="#4285f4" stroke-width="4"/><path d="M5 12v18" stroke="#34a853" stroke-width="4"/><path d="M35 12v18" stroke="#fbbc04" stroke-width="4"/><path d="m5 12 8 6" stroke="#ea4335" stroke-width="4"/><path d="m35 12-8 6" stroke="#ea4335" stroke-width="4"/></svg>';
+  return '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 5h5l3 8-4 3a23 23 0 0 0 9 9l3-4 8 3v5c0 2-2 4-4 4C17 32 8 23 5 9c0-2 2-4 6-4Z" fill="#064bff"/></svg>';
+}
+
+function header() {
+  const casesCurrent = page === "cases" ? ' aria-current="page"' : "";
+  const contactsCurrent = page === "contacts" ? ' aria-current="page"' : "";
+  return `<header class="site-nav">
+    <div class="nav-left">
+      <a class="brand" href="/">Илья Поликарпов</a>
+      <nav class="nav-links" aria-label="Основная навигация">
+        <a href="/cases/"${casesCurrent}>Кейсы</a>
+        <a href="/contacts/"${contactsCurrent}>Контакты</a>
+      </nav>
+    </div>
+    <div class="nav-actions">
+      <a class="button button-secondary" href="${links.resume}" target="_blank" rel="noopener noreferrer">Смотреть резюме</a>
+      <a class="button button-primary" href="${links.telegram}" target="_blank" rel="noopener noreferrer">Написать в Telegram</a>
+    </div>
+  </header>`;
+}
+
+function contactLinkMarkup({ title, value, href, kind }) {
+  return `<a class="contact-card" href="${escapeHtml(href)}"${kind === "telegram" ? ' target="_blank" rel="noopener noreferrer"' : ""}>
+    <span class="contact-card__label">${escapeHtml(title)}</span>
+    <span class="contact-card__value">${escapeHtml(value)}</span>
+  </a>`;
+}
+
+function footer() {
+  return `<footer class="footer-panel">
+    <h2>Давайте сотрудничать и работать вместе</h2>
+    <p>Конечно, если посчитаете нужным, ведь навязываться — плохо.</p>
+    <div class="footer-links">
+      <a href="${links.telegram}" target="_blank" rel="noopener noreferrer">${icon("telegram")}<span>@ilya_uxui_design</span></a>
+      <a href="mailto:${links.email}">${icon("email")}<span>${links.email}</span></a>
+      <a href="tel:${links.phoneHref}">${icon("phone")}<span>${links.phone}</span></a>
+    </div>
+  </footer>`;
+}
+
+function makeCaseCard(item, featured = false, index = 0) {
+  const title = escapeHtml(item.title);
+  const tagNames = [...new Set([...item.categories.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...item.tags])];
+  const tags = tagNames.slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+  return `<a class="${featured ? `featured-card featured-card--${index + 1}` : "case-card"}" href="${escapeHtml(item.href)}" target="_blank" rel="noopener noreferrer" data-featured="${featured}">
+    <img src="/images/${escapeHtml(item.image)}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" />
+    ${featured ? `<span class="featured-card__label">${title}</span>` : `<div class="case-card__body"><h3>${title}</h3><p>${escapeHtml(item.description)}</p><div class="tag-list">${tags}</div></div>`}
+    ${featured ? `<span class="case-tooltip" aria-hidden="true"><strong>${title}</strong><span>${escapeHtml(item.description)}</span><span class="tag-list">${tags}</span></span>` : ""}
+  </a>`;
+}
+
+function homePage() {
+  const featured = [cases[0], cases[1], { ...cases[2], image: "featured-loginom.png" }, cases[4]];
+  const years = experience.map(({ year, entries }) => `<div class="timeline-year">
+    <h3>${escapeHtml(year)}</h3>
+    <div class="experience-grid">${entries.map((entry) => `<article class="experience-card ${entry.kind === "course" ? "experience-card--course" : ""}">
+      <div class="experience-card__meta"><span>${escapeHtml(entry.company)}</span><span>${escapeHtml(entry.period)}</span></div>
+      <h4>${escapeHtml(entry.title)}</h4>
+      <p>${escapeHtml(entry.text)}</p>
+    </article>`).join("")}</div>
+  </div>`).join("");
+  const marqueeItems = programs.map((program) => `<span class="marquee-item">${escapeHtml(program)}<i aria-hidden="true"></i></span>`).join("");
+  return `<main class="page-content home-content">
+    <section class="hero-panel panel">
+      ${header()}
+      <div class="hero-copy">
+        <img class="hero-avatar" src="/images/portrait.jpeg" alt="Илья Поликарпов" width="160" height="160" />
+        <h1>Создаю цифровые продукты и отвечаю за весь процесс дизайна: от идеи до продакшн-решения</h1>
+        <p>Я UX/UI-дизайнер с акцентом на десктоп-интерфейсы B2B и B2C приложений. Помимо этого делаю дизайн сайтов и лендингов, визуал для мероприятий и соцсетей, вайбкожу с Codex, презентации. В общем, беру задачи, где надо разобраться, продумать решение и реализовать его, а не сделать в стол.</p>
+      </div>
+    </section>
+
+    <section class="content-section featured-section" aria-labelledby="featured-title">
+      <h2 class="section-title" id="featured-title">Кейсы</h2>
+      <div class="featured-grid">${featured.map((item, i) => makeCaseCard(item, true, i)).join("")}</div>
+      <a class="button button-primary all-cases" href="/cases/">Смотреть все кейсы</a>
+    </section>
+
+    <section class="content-section experience-section" aria-labelledby="experience-title">
+      <h2 class="section-title" id="experience-title">5 лет в дизайне</h2>
+      <div class="timeline">${years}</div>
+    </section>
+
+    <section class="about-section" aria-label="Немного обо мне">
+      <div class="about-copy">
+        <p>Мне нравится делать проекты с нуля, разбирать задачи на части и делать результат, который вдохновляет. Так я создал пет-проект по обучению редакторов, который сейчас превратился в целое комьюнити: сайт, телеграм-канал (более 1,5 тыс. подписчиков), курсы и подкасты.</p>
+        <img src="/images/about.jpeg" alt="Илья за работой над проектом" loading="lazy" />
+      </div>
+      <div class="program-marquee" aria-label="Инструменты и программы">
+        <div class="marquee-track"><div class="marquee-group">${marqueeItems}</div><div class="marquee-group" aria-hidden="true">${marqueeItems}</div></div>
+      </div>
+    </section>
+    ${footer()}
+  </main>`;
+}
+
+function casesPage() {
+  return `<main class="page-content cases-content">
+    <section class="page-heading panel">
+      ${header()}
+      <div class="page-heading__copy">
+        <h1>Здесь собраны рабочие, учебные, фриланс и вообще все-все последние проекты, которые мне нестыдно показать</h1>
+        <p>Для работодателей, потенциальных клиентов и знакомых, которые хотят за меня порадоваться, что я не просто так фигнёй по дизайну занимаюсь.</p>
+      </div>
+    </section>
+    <section class="content-section cases-section" aria-label="Проекты">
+      <div class="filter-list" role="group" aria-label="Фильтр кейсов">${categories.map(({ id, label }, index) => `<button class="filter-button" type="button" data-filter="${id}" aria-pressed="${index === 0}">${escapeHtml(label)}</button>`).join("")}</div>
+      <div class="case-grid">${cases.map((item) => makeCaseCard(item)).join("")}</div>
+      <p class="empty-state" hidden>В этой категории пока нет проектов.</p>
+    </section>
+    ${footer()}
+  </main>`;
+}
+
+function contactsPage() {
+  const longTitle = "Связывайтесь удобным способом и стартанём делать крутые проекты!";
+  const description = "Если вы ищете UX/UI дизайнера, вам нужно сделать сайт или лендинг, хотите найти автора и редактора статей по дизайну или же у вас какой-то специфичный проект — пишите, всё обсудим и договоримся. Если я не помогу, то смогу посоветовать другого специалиста.";
+  return `<main class="page-content contacts-content">
+    <section class="contacts-panel panel">
+      ${header()}
+      <div class="contact-intro">
+        <img src="/images/contacts-photo.jpeg" alt="Илья Поликарпов в Петербурге" width="160" height="160" />
+        <h1>${longTitle}</h1>
+        <p>${description}</p>
+      </div>
+      <div class="contact-grid">${contactCards.map(contactLinkMarkup).join("")}</div>
+    </section>
+  </main>`;
+}
+
+root.innerHTML = page === "cases" ? casesPage() : page === "contacts" ? contactsPage() : homePage();
+
+document.querySelectorAll(".filter-button").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".filter-button").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+    const filter = button.dataset.filter;
+    let visibleCount = 0;
+    document.querySelectorAll(".case-card").forEach((card, index) => {
+      const matches = filter === "all" || cases[index]?.categories.includes(filter);
+      card.hidden = !matches;
+      visibleCount += Number(matches);
+    });
+    const empty = document.querySelector(".empty-state");
+    if (empty) empty.hidden = visibleCount > 0;
+  });
+});
+
+if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  document.querySelectorAll(".featured-card").forEach((card) => {
+    const tooltip = card.querySelector(".case-tooltip");
+    const move = (x, y) => {
+      const gap = 20;
+      const box = tooltip.getBoundingClientRect();
+      const left = Math.min(x + gap, window.innerWidth - box.width - 12);
+      const top = Math.min(y + gap, window.innerHeight - box.height - 12);
+      tooltip.style.left = `${Math.max(12, left)}px`;
+      tooltip.style.top = `${Math.max(12, top)}px`;
+    };
+    card.addEventListener("pointerenter", (event) => {
+      card.classList.add("is-hovered");
+      move(event.clientX, event.clientY);
+    });
+    card.addEventListener("pointermove", (event) => move(event.clientX, event.clientY));
+    card.addEventListener("pointerleave", () => card.classList.remove("is-hovered"));
+    card.addEventListener("focus", () => {
+      card.classList.add("is-hovered");
+      const rect = card.getBoundingClientRect();
+      move(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    });
+    card.addEventListener("blur", () => card.classList.remove("is-hovered"));
+  });
+}
