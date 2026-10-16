@@ -319,6 +319,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .experience-card__meta { display: flex; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
 .experience-card h4 { font-family: var(--font-heading); font-size: 22px; font-weight: 400; line-height: 1.2; }
 .experience-card p { color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.experience-card--loginom p { white-space: pre-line; }
 
 .about-section { display: flex; flex-direction: column; gap: 24px; }
 .about-copy { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
