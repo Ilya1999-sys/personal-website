@@ -183,7 +183,7 @@ mobileFeatured.addEventListener?.("change", syncFeaturedLinks);
 const featuredStage = document.querySelector(".featured-stage");
 const featuredGrid = document.querySelector(".featured-grid");
 const featuredTrack = document.querySelector(".featured-track");
-const wideFeatured = window.matchMedia("(min-width: 1920px)");
+const allFeaturedVisible = window.matchMedia("(min-width: 1140px)");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 if (featuredStage && featuredGrid && featuredTrack && !reducedMotion.matches) {
   let frame = 0;
@@ -195,20 +195,22 @@ if (featuredStage && featuredGrid && featuredTrack && !reducedMotion.matches) {
       featuredTrack.style.gridTemplateColumns = "";
       return;
     }
-    const wide = wideFeatured.matches;
+    const showAll = allFeaturedVisible.matches;
     const cards = [...featuredTrack.querySelectorAll(".featured-card")];
     const width = featuredGrid.clientWidth;
-    const maxHeight = wide ? (width - 3 * 24) * 9 / 16 : width * 9 / 16;
+    const gap = showAll ? Math.max(12, Math.min(24, window.innerWidth * 0.0125)) : 24;
+    const small = showAll ? Math.max(140, Math.min(250, window.innerWidth * 0.1302)) : 0;
+    const maxHeight = showAll ? (width - 3 * small - 3 * gap) * 9 / 16 : width * 9 / 16;
     featuredStage.style.height = `${window.innerHeight * 3 + maxHeight}px`;
     const start = featuredStage.getBoundingClientRect().top + window.scrollY;
     const range = Math.max(1, window.innerHeight * 3);
     const progress = Math.max(0, Math.min(cards.length - 1, ((window.scrollY - start) / range) * (cards.length - 1)));
     const active = Math.min(cards.length - 1, Math.floor(progress));
     const blend = progress >= cards.length - 1 ? 0 : progress - active;
-    if (wide) {
-      const large = width - 3 * 250 - 3 * 24;
-      const sizes = cards.map((_, index) => index === active ? large + (250 - large) * blend : index === active + 1 ? 250 + (large - 250) * blend : 250);
-      featuredTrack.style.gridTemplateColumns = sizes.map((size) => `${Math.max(250, size)}px`).join(" ");
+    if (showAll) {
+      const large = width - 3 * small - 3 * gap;
+      const sizes = cards.map((_, index) => index === active ? large + (small - large) * blend : index === active + 1 ? small + (large - small) * blend : small);
+      featuredTrack.style.gridTemplateColumns = sizes.map((size) => `${Math.max(small, size)}px`).join(" ");
       featuredTrack.style.transform = "";
     } else {
       featuredTrack.style.gridTemplateColumns = "";
@@ -220,7 +222,7 @@ if (featuredStage && featuredGrid && featuredTrack && !reducedMotion.matches) {
   };
   window.addEventListener("scroll", scheduleFeaturedUpdate, { passive: true });
   window.addEventListener("resize", scheduleFeaturedUpdate);
-  wideFeatured.addEventListener?.("change", scheduleFeaturedUpdate);
+  allFeaturedVisible.addEventListener?.("change", scheduleFeaturedUpdate);
   mobileFeatured.addEventListener?.("change", scheduleFeaturedUpdate);
   scheduleFeaturedUpdate();
 }

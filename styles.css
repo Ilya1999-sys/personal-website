@@ -440,8 +440,8 @@ h1, h2, h3, h4, p { margin: 0; }
   :root { --section-gap: 104px; }
   .featured-stage { height: calc(300vh + 56vw); }
   .featured-grid { position: sticky; top: 8vh; }
-  .featured-track { display: flex; gap: 24px; }
-  .featured-card { flex: 0 0 100%; aspect-ratio: 16 / 9; overflow: hidden; }
+  .featured-track { grid-template-columns: minmax(0, 1fr) repeat(3, clamp(140px, 13.02vw, 250px)); gap: clamp(12px, 1.25vw, 24px); }
+  .featured-card { aspect-ratio: 16 / 9; overflow: hidden; }
   .timeline-year, .timeline-late .timeline-year { grid-template-columns: 200px minmax(0, 1fr); gap: 48px; }
   .timeline-year > h3 { font-size: 64px; }
   .timeline-late { grid-template-columns: 43% minmax(0, 1fr) minmax(0, 1fr); }
@@ -587,6 +587,13 @@ h1, h2, h3, h4, p { margin: 0; }
   .featured-grid { position: static !important; overflow: visible; }
   .featured-track { display: flex !important; gap: 24px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
   .featured-card { flex: 0 0 min(84vw, 900px) !important; scroll-snap-align: start; }
+}
+
+@media (min-width: 1140px) and (prefers-reduced-motion: reduce) {
+  .featured-stage { height: auto !important; }
+  .featured-grid { position: static !important; overflow: visible; }
+  .featured-track { display: grid !important; grid-template-columns: minmax(0, 1fr) repeat(3, clamp(140px, 13.02vw, 250px)) !important; gap: clamp(12px, 1.25vw, 24px); overflow: visible; padding-bottom: 0; }
+  .featured-card { flex: initial !important; scroll-snap-align: unset; }
 }
 
 @media (prefers-reduced-motion: reduce) {
