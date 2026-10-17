@@ -1,4 +1,8 @@
-import { cases, categories, contactCards, experience, links, programs } from "./data.js";
+import { categories, contactCards, experience, links, programs } from "./data.js";
+
+const casesResponse = await fetch("/content/cases.json");
+if (!casesResponse.ok) throw new Error(`Не удалось загрузить кейсы: ${casesResponse.status}`);
+const cases = await casesResponse.json();
 
 const root = document.querySelector("#site");
 const page = document.body.dataset.page || "home";
@@ -28,6 +32,11 @@ function header() {
   </header>`;
 }
 
+function caseImageSrc(image) {
+  if (!image) return "";
+  return image.startsWith("/") ? image : `/images/${image}`;
+}
+
 function contactLinkMarkup({ title, value, href, kind }) {
   return `<a class="contact-card" href="${escapeHtml(href)}"${kind === "telegram" ? ' target="_blank" rel="noopener noreferrer"' : ""}>
     <span class="contact-card__label">${escapeHtml(title)}</span>
@@ -49,7 +58,9 @@ function footer() {
 
 function makeCaseCard(item, featured = false, index = 0) {
   const title = escapeHtml(item.title);
-  const tagNames = [...new Set([...item.categories.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...item.tags])];
+  const categoryIds = Array.isArray(item.categories) ? item.categories : [];
+  const itemTags = Array.isArray(item.tags) ? item.tags : [];
+  const tagNames = [...new Set([...categoryIds.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...itemTags])];
   const tags = tagNames.slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
   const tooltip = item.tooltip || item;
   const tooltipTitle = escapeHtml(tooltip.title);
@@ -57,9 +68,9 @@ function makeCaseCard(item, featured = false, index = 0) {
   const tooltipTags = (tooltip.tags || tagNames).slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
   const mobile = item.mobile || item;
   const cardClass = featured ? `featured-card featured-card--${index + 1}` : "case-card";
-  return `<a class="${cardClass}" href="${escapeHtml(item.href)}"${featured && item.mobile ? ` data-desktop-href="${escapeHtml(item.href)}" data-mobile-href="${escapeHtml(mobile.href)}"` : ""} target="_blank" rel="noopener noreferrer" data-featured="${featured}">
-    <picture>${featured && mobile.image !== item.image ? `<source media="(max-width: 767px)" srcset="/images/${escapeHtml(mobile.image)}" />` : ""}<img src="/images/${escapeHtml(item.image)}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" /></picture>
-    ${featured ? `<div class="featured-card__mobile-copy"><h3>${escapeHtml(mobile.title)}</h3><p>${escapeHtml(mobile.description)}</p><div class="tag-list">${[...new Set([...mobile.categories.map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...mobile.tags])].slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div></div>` : ""}
+  return `<a class="${cardClass}" href="${escapeHtml(item.href || "#")}"${featured && item.mobile ? ` data-desktop-href="${escapeHtml(item.href)}" data-mobile-href="${escapeHtml(mobile.href)}"` : ""} target="_blank" rel="noopener noreferrer" data-featured="${featured}">
+    <picture>${featured && mobile.image !== item.image ? `<source media="(max-width: 767px)" srcset="${escapeHtml(caseImageSrc(mobile.image))}" />` : ""}<img src="${escapeHtml(caseImageSrc(item.image))}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" /></picture>
+    ${featured ? `<div class="featured-card__mobile-copy"><h3>${escapeHtml(mobile.title)}</h3><p>${escapeHtml(mobile.description)}</p><div class="tag-list">${[...new Set([...(Array.isArray(mobile.categories) ? mobile.categories : []).map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...(Array.isArray(mobile.tags) ? mobile.tags : [])])].slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div></div>` : ""}
     ${featured ? `<span class="featured-card__label">${title}</span>` : `<div class="case-card__body"><h3>${title}</h3><p>${escapeHtml(item.description)}</p><div class="tag-list">${tags}</div></div>`}
     ${featured ? `<span class="case-tooltip" aria-hidden="true"><strong>${tooltipTitle}</strong><span>${tooltipDescription}</span><span class="tag-list">${tooltipTags}</span></span>` : ""}
   </a>`;
@@ -176,7 +187,7 @@ document.querySelectorAll(".filter-button").forEach((button) => {
     const filter = button.dataset.filter;
     let visibleCount = 0;
     document.querySelectorAll(".case-card").forEach((card, index) => {
-      const matches = filter === "all" || cases[index]?.categories.includes(filter);
+      const matches = filter === "all" || cases[index]?.categories?.includes(filter);
       card.hidden = !matches;
       visibleCount += Number(matches);
     });

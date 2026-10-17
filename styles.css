@@ -489,11 +489,11 @@ h1, h2, h3, h4, p { margin: 0; }
   .hero-panel, .page-heading { padding: 8px 8px 20px; border-radius: 24px; }
   .site-nav { min-height: 0; padding: 8px; display: block; border-radius: 16px; }
   .nav-left { justify-content: space-between; gap: 8px; }
-  .nav-links { gap: 12px; }
+  .nav-links { gap: 18px; }
   .brand { padding-left: 4px; font-size: 14px; line-height: 20px; }
   .nav-links a { padding: 4px 0; font-size: 12px; line-height: 18px; }
   .nav-actions { margin-top: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-  .button { min-height: 38px; padding: 8px 12px; font-size: 13px; line-height: 18px; }
+  .nav-actions .button { min-height: 48px; padding: 12px 24px; font-size: 14px; line-height: 20px; }
   .hero-copy, .page-heading__copy { margin-top: 24px; gap: 12px; }
   .hero-copy__text { gap: 12px; }
   .hero-avatar, .contact-intro > img { width: 120px; height: 120px; border-radius: 12px; }
@@ -542,8 +542,8 @@ h1, h2, h3, h4, p { margin: 0; }
   .cases-content { gap: 24px; }
   .page-heading__copy { margin-top: 24px; }
   .cases-section { gap: 16px; }
-  .filter-list { justify-content: flex-start; gap: 6px; }
-  .filter-button { min-height: 34px; padding: 5px 12px; font-size: 13px; }
+  .filter-list { justify-content: center; gap: 8px 12px; }
+  .filter-button { min-height: 50px; padding: 8px 24px; font-size: 20px; line-height: 32px; }
   .case-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .case-card { padding: 8px; gap: 8px; }
   .case-card > img { border-radius: 8px; }
@@ -568,7 +568,6 @@ h1, h2, h3, h4, p { margin: 0; }
   .hero-avatar, .contact-intro > img { width: 136px; height: 136px; }
   .hero-copy__text h1, .page-heading__copy h1, .contact-intro h1 { font-size: 38px; }
   .hero-copy__text p, .page-heading__copy p, .contact-intro p { font-size: 16px; }
-  .filter-list { justify-content: center; }
   .case-card h3 { font-size: 21px; }
   .case-card p { font-size: 13px; }
 }
@@ -576,7 +575,7 @@ h1, h2, h3, h4, p { margin: 0; }
 @media (max-width: 449px) {
   :root { --page-gutter: 8px; --section-gap: 48px; }
   .brand { font-size: 13px; }
-  .nav-links { gap: 9px; }
+  .nav-links { gap: 12px; }
   .nav-links a { font-size: 11px; }
   .hero-copy__text h1, .page-heading__copy h1, .contact-intro h1 { font-size: 32px; }
   .hero-copy__text p, .page-heading__copy p, .contact-intro p { font-size: 14px; }
