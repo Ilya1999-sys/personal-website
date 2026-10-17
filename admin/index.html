@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#e2e6e7" />
+    <title>Админка кейсов — Илья Поликарпов</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/admin/admin.css" />
+    <script type="module" src="/admin/admin.js"></script>
+  </head>
+  <body class="admin-page">
+    <main class="admin-shell">
+      <header class="admin-header">
+        <a class="admin-brand" href="/">Илья Поликарпов <span>Админка кейсов</span></a>
+        <a class="admin-back" href="/cases/">Открыть портфолио ↗</a>
+      </header>
+      <div class="admin-layout">
+        <aside class="admin-list panel" aria-label="Список кейсов">
+          <div class="admin-list__heading"><h1>Кейсы</h1><button class="button button-primary" id="add-case" type="button">Добавить</button></div>
+          <p class="admin-status" id="admin-status" role="status" aria-live="polite">Загружаю кейсы…</p>
+          <div class="admin-case-list" id="admin-case-list"></div>
+        </aside>
+        <section class="admin-editor panel" aria-labelledby="editor-title">
+          <div class="admin-editor__heading"><div><p class="admin-eyebrow">Редактирование</p><h2 id="editor-title">Новый кейс</h2></div><button class="admin-delete" id="delete-case" type="button" hidden>Удалить</button></div>
+          <form id="case-form">
+            <label class="admin-field"><span>Заголовок</span><input name="title" maxlength="160" required /></label>
+            <label class="admin-field"><span>Описание</span><textarea name="description" rows="5" maxlength="5000" required></textarea></label>
+            <div class="admin-field"><span>Обложка</span><label class="admin-upload" for="image-file"><img id="image-preview" alt="Предпросмотр обложки" hidden /><span id="image-prompt">Выбрать JPG, PNG или WebP до 10 МБ</span><input id="image-file" name="image" type="file" accept="image/jpeg,image/png,image/webp" /></label></div>
+            <fieldset class="admin-field admin-categories"><legend>Категории для фильтрации</legend><div class="admin-checks">
+              <label><input type="checkbox" name="categories" value="uxui" /> UX/UI</label>
+              <label><input type="checkbox" name="categories" value="web" /> Веб-дизайн</label>
+              <label><input type="checkbox" name="categories" value="creative" /> Креативы</label>
+              <label><input type="checkbox" name="categories" value="motion" /> Моушен</label>
+              <label><input type="checkbox" name="categories" value="article" /> Статьи</label>
+            </div></fieldset>
+            <fieldset class="admin-field admin-tags"><legend>Теги <span>до 5, необязательно</span></legend><div class="admin-tag-inputs"><input name="tag" maxlength="40" aria-label="Тег 1" /><input name="tag" maxlength="40" aria-label="Тег 2" /><input name="tag" maxlength="40" aria-label="Тег 3" /><input name="tag" maxlength="40" aria-label="Тег 4" /><input name="tag" maxlength="40" aria-label="Тег 5" /></div></fieldset>
+            <label class="admin-field"><span>Ссылка на проект <small>необязательно</small></span><input name="href" type="url" placeholder="https://" /></label>
+            <div class="admin-form-actions"><button class="button button-primary" id="save-case" type="submit">Сохранить кейс</button><p id="form-message" class="form-message" role="status" aria-live="polite"></p></div>
+          </form>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

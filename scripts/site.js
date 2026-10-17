@@ -1,8 +1,15 @@
 import { categories, contactCards, experience, links, programs } from "./data.js";
 
-const casesResponse = await fetch("/content/cases.json");
-if (!casesResponse.ok) throw new Error(`Не удалось загрузить кейсы: ${casesResponse.status}`);
-const cases = await casesResponse.json();
+async function loadCases() {
+  const apiResponse = await fetch("/api/cases").catch(() => null);
+  if (apiResponse?.ok) return apiResponse.json();
+
+  const staticResponse = await fetch("/content/cases.json");
+  if (!staticResponse.ok) throw new Error(`Не удалось загрузить кейсы: ${staticResponse.status}`);
+  return staticResponse.json();
+}
+
+const cases = await loadCases();
 
 const root = document.querySelector("#site");
 const page = document.body.dataset.page || "home";
@@ -19,7 +26,7 @@ function header() {
   const contactsCurrent = page === "contacts" ? ' aria-current="page"' : "";
   return `<header class="site-nav">
     <div class="nav-left">
-      <a class="brand" href="/">Илья Поликарпов</a>
+      <a class="brand" href="/" aria-label="Илья Поликарпов"><span class="brand-full">Илья Поликарпов</span><span class="brand-short" aria-hidden="true">Илья П.</span></a>
       <nav class="nav-links" aria-label="Основная навигация">
         <a href="/cases/"${casesCurrent}>Кейсы</a>
         <a href="/contacts/"${contactsCurrent}>Контакты</a>
@@ -34,6 +41,7 @@ function header() {
 
 function caseImageSrc(image) {
   if (!image) return "";
+  if (image.startsWith("r2:")) return `/media/${encodeURIComponent(image.slice(3))}`;
   return image.startsWith("/") ? image : `/images/${image}`;
 }
 
