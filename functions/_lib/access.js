@@ -1,65 +1,59 @@
-let jwksCache;
+const cookieName = "portfolio_admin";
+const sessionSeconds = 60 * 60 * 24 * 7;
+
+function encodeBase64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 
 function decodeBase64Url(value) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   return Uint8Array.from(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")), (char) => char.charCodeAt(0));
 }
 
-async function getJwks(teamDomain) {
-  if (!jwksCache || jwksCache.expiresAt <= Date.now()) {
-    const promise = fetch(`${teamDomain}/cdn-cgi/access/certs`, { cf: { cacheTtl: 300, cacheEverything: true } })
-      .then((response) => {
-        if (!response.ok) throw new Error("Не удалось получить ключи Cloudflare Access");
-        return response.json();
-      })
-      .catch((error) => {
-        jwksCache = undefined;
-        throw error;
-      });
-    jwksCache = { expiresAt: Date.now() + 300_000, promise };
-  }
-  return jwksCache.promise;
+function sessionKey(password) {
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 
-async function hasAdminAccess(request, env) {
-  if (!env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUDS || !env.ADMIN_EMAIL) return false;
-  const token = request.headers.get("Cf-Access-Jwt-Assertion");
-  if (!token) return false;
+export function readAdminCookie(request) {
+  const value = request.headers.get("Cookie") || "";
+  const pair = value.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${cookieName}=`));
+  return pair ? pair.slice(cookieName.length + 1) : "";
+}
 
+export async function createAdminSession(password) {
+  const payload = encodeBase64Url(new TextEncoder().encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + sessionSeconds })));
+  const signature = await crypto.subtle.sign("HMAC", await sessionKey(password), new TextEncoder().encode(payload));
+  return `${payload}.${encodeBase64Url(new Uint8Array(signature))}`;
+}
+
+export async function hasAdminSession(request, env) {
+  if (!env.ADMIN_PASSWORD) return false;
+  const token = readAdminCookie(request);
+  const [payload, signature, extra] = token.split(".");
+  if (!payload || !signature || extra) return false;
   try {
-    const [headerPart, payloadPart, signaturePart] = token.split(".");
-    if (!headerPart || !payloadPart || !signaturePart) return false;
-    const header = JSON.parse(new TextDecoder().decode(decodeBase64Url(headerPart)));
-    const claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(payloadPart)));
-    if (header.alg !== "RS256" || typeof header.kid !== "string") return false;
-
-    const teamDomain = env.CF_ACCESS_TEAM_DOMAIN.replace(/\/$/, "");
-    const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    const expectedAudiences = env.CF_ACCESS_AUDS.split(",").map((value) => value.trim()).filter(Boolean);
-    const now = Math.floor(Date.now() / 1000);
-    if (claims.iss !== teamDomain || !expectedAudiences.some((expected) => audiences.includes(expected))) return false;
-    if (typeof claims.exp !== "number" || claims.exp <= now || (claims.nbf && claims.nbf > now)) return false;
-    if (String(claims.email || "").toLowerCase() !== env.ADMIN_EMAIL.trim().toLowerCase()) return false;
-
-    const jwks = await getJwks(teamDomain);
-    const jwk = jwks.keys?.find((key) => key.kid === header.kid && key.kty === "RSA");
-    if (!jwk) return false;
-    const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-    return crypto.subtle.verify(
-      { name: "RSASSA-PKCS1-v1_5" },
-      key,
-      decodeBase64Url(signaturePart),
-      new TextEncoder().encode(`${headerPart}.${payloadPart}`),
-    );
+    const claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(payload)));
+    if (typeof claims.exp !== "number" || claims.exp <= Math.floor(Date.now() / 1000)) return false;
+    return await crypto.subtle.verify("HMAC", await sessionKey(env.ADMIN_PASSWORD), decodeBase64Url(signature), new TextEncoder().encode(payload));
   } catch {
     return false;
   }
 }
 
+export function sessionCookie(token) {
+  return `${cookieName}=${token}; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=${sessionSeconds}`;
+}
+
+export function clearedSessionCookie() {
+  return `${cookieName}=; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+}
+
 export async function requireAdminAccess(request, env) {
-  if (await hasAdminAccess(request, env)) return null;
-  return new Response("Нужен вход через Cloudflare Access", {
-    status: 403,
-    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+  if (await hasAdminSession(request, env)) return null;
+  return Response.json({ error: "Войдите в админку, чтобы продолжить" }, {
+    status: 401,
+    headers: { "Cache-Control": "no-store" },
   });
 }

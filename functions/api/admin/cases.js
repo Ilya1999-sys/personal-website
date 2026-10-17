@@ -14,7 +14,7 @@ function validateCase(value) {
 
   if (!title || title.length > 160) return { error: "Заголовок обязателен и должен быть короче 160 символов" };
   if (!description || description.length > 5000) return { error: "Описание обязательно и должно быть короче 5000 символов" };
-  if (!image || image.length > 255) return { error: "Добавьте обложку проекта" };
+  if (!image || image.length > 2048) return { error: "Добавьте обложку проекта" };
   if (!categories.length || categories.some((category) => !allowedCategories.has(category))) return { error: "Выберите хотя бы одну допустимую категорию" };
   if (tags.length > 5 || tags.some((tag) => tag.length > 40)) return { error: "Можно указать не более пяти тегов по 40 символов" };
   if (href) {
@@ -24,7 +24,12 @@ function validateCase(value) {
     } catch { return { error: "Проверьте ссылку на проект" }; }
   }
   if (image.startsWith("r2:") && !/^r2:cases_[a-f0-9-]+\.(jpg|png|webp)$/.test(image)) return { error: "Некорректная ссылка на обложку" };
-  if (!image.startsWith("r2:") && !image.startsWith("/images/")) return { error: "Обложка должна быть локальным файлом сайта" };
+  if (image.startsWith("/images/") && image.includes("..")) return { error: "Некорректная ссылка на обложку" };
+  if (!image.startsWith("r2:") && !image.startsWith("/images/")) {
+    try {
+      if (new URL(image).protocol !== "https:") return { error: "Ссылка на обложку должна начинаться с https://" };
+    } catch { return { error: "Укажите файл сайта или публичную HTTPS-ссылку на обложку" }; }
+  }
 
   return { value: { title, description, image, href, categories, tags } };
 }

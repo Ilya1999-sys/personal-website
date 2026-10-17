@@ -1,10 +1,18 @@
 .admin-page { min-height: 100vh; }
+[hidden] { display: none !important; }
 .admin-shell { width: min(1440px, 100%); margin: 0 auto; padding: 24px; }
 .admin-header, .admin-brand, .admin-list__heading, .admin-editor__heading, .admin-form-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.admin-header__actions { display: flex; align-items: center; gap: 18px; }
 .admin-header { margin-bottom: 24px; }
 .admin-brand { justify-content: flex-start; color: var(--text-primary); font-size: 20px; font-weight: 600; text-decoration: none; }
 .admin-brand span, .admin-back, .admin-eyebrow, .admin-field small, .admin-tags legend span { color: var(--text-tertiary); font-size: 13px; font-weight: 400; }
 .admin-back { text-decoration: none; }
+.admin-logout { border: 0; padding: 8px 0; background: transparent; color: var(--text-tertiary); font: inherit; cursor: pointer; }
+.admin-login { width: min(480px, 100%); margin: 10vh auto; padding: 32px; border-radius: 24px; }
+.admin-login h1 { margin-bottom: 10px; font-family: var(--font-heading); font-size: 32px; font-weight: 400; }
+.admin-login > p:not(.admin-eyebrow) { margin-bottom: 24px; color: var(--text-secondary); line-height: 1.5; }
+.admin-login form { display: grid; gap: 16px; }
+.admin-login code { font-size: .9em; }
 .admin-layout { display: grid; grid-template-columns: minmax(250px, .72fr) minmax(0, 1.65fr); align-items: start; gap: 20px; }
 .admin-list, .admin-editor { padding: 24px; border-radius: 24px; }
 .admin-list__heading { align-items: center; margin-bottom: 14px; }
@@ -26,6 +34,8 @@
 .admin-upload { min-height: 150px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; padding: 16px; border: 1px dashed #aab1b4; border-radius: 14px; background: #f8f9f9; color: var(--text-tertiary); text-align: center; font-size: 13px; cursor: pointer; }
 .admin-upload input { width: min(100%, 260px); font: inherit; }
 .admin-upload img { max-height: 220px; border-radius: 10px; object-fit: contain; }
+.admin-image-url { font-weight: 400; }
+.admin-help { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; font-weight: 400; }
 .admin-categories, .admin-tags { padding: 0; border: 0; }
 .admin-categories legend, .admin-tags legend { margin-bottom: 10px; font-size: 14px; font-weight: 600; }
 .admin-tags legend span { margin-left: 6px; }
@@ -40,6 +50,7 @@
 @media (max-width: 720px) {
   .admin-shell { padding: 12px; }
   .admin-header { align-items: flex-start; flex-direction: column; margin-bottom: 14px; }
+  .admin-header__actions { width: 100%; justify-content: space-between; }
   .admin-layout { grid-template-columns: minmax(0, 1fr); }
   .admin-list, .admin-editor { padding: 16px; border-radius: 18px; }
   .admin-case-list { max-height: 240px; }
@@ -48,5 +59,6 @@
 @media (max-width: 420px) {
   .admin-tag-inputs { grid-template-columns: minmax(0, 1fr); }
   .admin-brand { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .admin-login { margin: 5vh auto; padding: 20px; }
   .admin-form-actions { align-items: flex-start; flex-direction: column; }
 }

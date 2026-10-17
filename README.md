@@ -20,15 +20,14 @@ python3 -m http.server 4173
 
 ## Админка кейсов
 
-Интерфейс находится по адресу `/admin/`. Он редактирует заголовок, описание, обложку, ссылку на проект, категории фильтрации и до пяти тегов. Для защиты доступа и хранения используются Cloudflare Access, Pages Functions, D1 и R2. Файлы `functions/` содержат API, `migrations/0001_create_cases.sql` создаёт и заполняет базу начальными данными. Файл `.pages.yml` относится к прежней Pages CMS интеграции; новая админка использует D1 как единственный источник актуальных кейсов.
+Интерфейс находится по адресу `/admin/`. Он редактирует заголовок, описание, обложку, ссылку на проект, категории фильтрации и до пяти тегов. Pages Functions проверяют пароль и выдают подписанную HttpOnly-сессию; для входа задайте secret `ADMIN_PASSWORD` в Cloudflare Pages → Settings → Variables and Secrets. Не добавляйте пароль в Git и не отправляйте его в чат. Попытки входа ограничиваются через D1. До подключения R2 изображения можно указывать по HTTPS-ссылке или использовать локальные файлы из `images/`; загрузка файлов через форму требует R2 binding `BUCKET`.
 
 Перед включением админки в Cloudflare Pages нужно:
 
 1. Создать D1 database `portfolio-cases` и применить начальную схему и данные командой `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0001_create_cases.sql`.
-2. Создать R2 bucket `portfolio-case-images`.
-3. В Pages-проекте добавить D1 binding `DB` → `portfolio-cases` и R2 binding `BUCKET` → `portfolio-case-images`.
-4. В Cloudflare Access создать две Self-hosted application с email allowlist для личного адреса: `ilyapolikarpov.ru/admin*` и `ilyapolikarpov.ru/api/admin*`.
-5. Добавить Pages environment variables `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUDS` (оба Application Audience Tag через запятую) и `ADMIN_EMAIL`.
-6. Повторно задеплоить Pages-проект после добавления bindings и переменных.
+2. В Pages-проекте добавить D1 binding `DB` → `portfolio-cases`.
+3. Добавить secret `ADMIN_PASSWORD` в production environment. Используйте уникальную длинную парольную фразу; Cloudflare Access и платёжная настройка для входа не нужны.
+4. Для загрузки изображений добавить R2 bucket `portfolio-case-images` и binding `BUCKET` → `portfolio-case-images` (необязательно; это требует включить R2 billing).
+5. Повторно задеплоить Pages-проект после добавления binding и секрета.
 
-Pages Functions также проверяют подпись Cloudflare Access JWT, его issuer, audience, срок действия и email. Поэтому одного открытого Pages URL недостаточно для доступа к экрану или изменяющим API. Не добавляй секреты в Git и не отправляй пароли или API-токены в чат.
+Публичная оболочка `/admin/` не содержит данных; список и изменение кейсов доступны только после проверки серверной сессии. Не добавляйте секреты в Git и не отправляйте пароли или API-токены в чат.

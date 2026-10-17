@@ -14,9 +14,15 @@
     <main class="admin-shell">
       <header class="admin-header">
         <a class="admin-brand" href="/">Илья Поликарпов <span>Админка кейсов</span></a>
-        <a class="admin-back" href="/cases/">Открыть портфолио ↗</a>
+        <div class="admin-header__actions"><a class="admin-back" href="/cases/">Открыть портфолио ↗</a><button class="admin-logout" id="admin-logout" type="button" hidden>Выйти</button></div>
       </header>
-      <div class="admin-layout">
+      <section class="admin-login panel" id="admin-login" aria-labelledby="login-title" hidden>
+        <p class="admin-eyebrow">Приватный доступ</p>
+        <h1 id="login-title">Админка кейсов</h1>
+        <p>Введите пароль, который вы добавили в Cloudflare Pages как секрет <code>ADMIN_PASSWORD</code>.</p>
+        <form id="login-form"><label class="admin-field"><span>Пароль</span><input name="password" type="password" autocomplete="current-password" required /></label><button class="button button-primary" id="login-submit" type="submit">Войти</button><p id="login-message" class="form-message" role="status" aria-live="polite"></p></form>
+      </section>
+      <div class="admin-layout" id="admin-layout" hidden>
         <aside class="admin-list panel" aria-label="Список кейсов">
           <div class="admin-list__heading"><h1>Кейсы</h1><button class="button button-primary" id="add-case" type="button">Добавить</button></div>
           <p class="admin-status" id="admin-status" role="status" aria-live="polite">Загружаю кейсы…</p>
@@ -27,7 +33,7 @@
           <form id="case-form">
             <label class="admin-field"><span>Заголовок</span><input name="title" maxlength="160" required /></label>
             <label class="admin-field"><span>Описание</span><textarea name="description" rows="5" maxlength="5000" required></textarea></label>
-            <div class="admin-field"><span>Обложка</span><label class="admin-upload" for="image-file"><img id="image-preview" alt="Предпросмотр обложки" hidden /><span id="image-prompt">Выбрать JPG, PNG или WebP до 10 МБ</span><input id="image-file" name="image" type="file" accept="image/jpeg,image/png,image/webp" /></label></div>
+            <div class="admin-field"><span>Обложка</span><label class="admin-upload" for="image-file"><img id="image-preview" alt="Предпросмотр обложки" hidden /><span id="image-prompt">Выбрать JPG, PNG или WebP до 10 МБ</span><input id="image-file" name="image" type="file" accept="image/jpeg,image/png,image/webp" /></label><label class="admin-field admin-image-url"><span>Или HTTPS-ссылка на изображение</span><input name="imageUrl" type="url" placeholder="https://…" /></label><small class="admin-help">Загрузка файла напрямую включается после подключения хранилища. Пока можно указать публичную HTTPS-ссылку или использовать изображение сайта.</small></div>
             <fieldset class="admin-field admin-categories"><legend>Категории для фильтрации</legend><div class="admin-checks">
               <label><input type="checkbox" name="categories" value="uxui" /> UX/UI</label>
               <label><input type="checkbox" name="categories" value="web" /> Веб-дизайн</label>

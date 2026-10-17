@@ -8,6 +8,11 @@ const imageInput = document.querySelector("#image-file");
 const imagePreview = document.querySelector("#image-preview");
 const imagePrompt = document.querySelector("#image-prompt");
 const categoryLabels = new Map([["uxui", "UX/UI"], ["web", "Веб-дизайн"], ["creative", "Креативы"], ["motion", "Моушен"], ["article", "Статьи"]]);
+const loginPanel = document.querySelector("#admin-login");
+const adminLayout = document.querySelector("#admin-layout");
+const loginForm = document.querySelector("#login-form");
+const loginMessage = document.querySelector("#login-message");
+const logoutButton = document.querySelector("#admin-logout");
 let cases = [];
 let selectedId = null;
 let currentImage = "";
@@ -19,10 +24,28 @@ const message = (text, isError = false) => {
 };
 
 async function api(url, options = {}) {
-  const response = await fetch(url, { ...options, headers: { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...options.headers } });
+  const response = await fetch(url, { cache: "no-store", ...options, headers: { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...options.headers } });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Ошибка сервера: ${response.status}`);
+  if (!response.ok) {
+    if (response.status === 401 && url.startsWith("/api/admin/")) showLogin("Сессия завершена. Войдите снова.");
+    throw new Error(data.error || `Ошибка сервера: ${response.status}`);
+  }
   return data;
+}
+
+function showLogin(text = "") {
+  cases = [];
+  loginPanel.hidden = false;
+  adminLayout.hidden = true;
+  logoutButton.hidden = true;
+  loginMessage.textContent = text;
+  loginMessage.dataset.error = "true";
+}
+
+function showAdmin() {
+  loginPanel.hidden = true;
+  adminLayout.hidden = false;
+  logoutButton.hidden = false;
 }
 
 function renderList() {
@@ -31,17 +54,26 @@ function renderList() {
   status.textContent = `${cases.length} ${cases.length === 1 ? "кейс" : "кейсов"}`;
 }
 
+function imageSource(image) {
+  if (image.startsWith("r2:")) return `/media/${encodeURIComponent(image.slice(3))}`;
+  if (image.startsWith("/")) return image;
+  if (/^https:\/\//i.test(image)) return image;
+  return `/images/${image}`;
+}
+
 function setImage(image) {
   currentImage = image || "";
   if (!currentImage) {
     imagePreview.hidden = true;
     imagePreview.removeAttribute("src");
     imagePrompt.textContent = "Выбрать JPG, PNG или WebP до 10 МБ";
+    form.elements.imageUrl.value = "";
     return;
   }
-  imagePreview.src = currentImage.startsWith("r2:") ? `/media/${encodeURIComponent(currentImage.slice(3))}` : currentImage.startsWith("/") ? currentImage : `/images/${currentImage}`;
+  imagePreview.src = imageSource(currentImage);
   imagePreview.hidden = false;
   imagePrompt.textContent = "Заменить обложку";
+  form.elements.imageUrl.value = currentImage.startsWith("https://") ? currentImage : "";
 }
 
 function selectCase(id) {
@@ -74,12 +106,57 @@ function resetForm() {
   renderList();
 }
 
+async function loadCases() {
+  cases = await api("/api/cases");
+  renderList();
+  if (cases.length) selectCase(cases[0].id);
+  else resetForm();
+}
+
 imageInput.addEventListener("change", () => {
   const file = imageInput.files?.[0];
-  if (file) imagePreview.src = URL.createObjectURL(file), imagePreview.hidden = false;
+  if (file) {
+    form.elements.imageUrl.value = "";
+    imagePreview.src = URL.createObjectURL(file);
+    imagePreview.hidden = false;
+  }
+});
+
+form.elements.imageUrl.addEventListener("input", () => {
+  imageInput.value = "";
+  const value = form.elements.imageUrl.value.trim();
+  if (value.startsWith("https://")) {
+    imagePreview.src = value;
+    imagePreview.hidden = false;
+  }
 });
 
 document.querySelector("#add-case").addEventListener("click", resetForm);
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = document.querySelector("#login-submit");
+  button.disabled = true;
+  loginMessage.textContent = "Проверяю пароль…";
+  loginMessage.dataset.error = "false";
+  try {
+    const password = loginForm.elements.password.value;
+    await api("/api/admin/login", { method: "POST", body: JSON.stringify({ password }) });
+    loginForm.reset();
+    showAdmin();
+    await loadCases();
+  } catch (error) {
+    loginMessage.textContent = error.message || "Не удалось войти";
+    loginMessage.dataset.error = "true";
+  } finally {
+    button.disabled = false;
+  }
+});
+
+logoutButton.addEventListener("click", async () => {
+  try { await fetch("/api/admin/session", { method: "DELETE", cache: "no-store" }); } catch { /* The server session still expires after seven days. */ }
+  showLogin("Вы вышли из админки.");
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -93,6 +170,8 @@ form.addEventListener("submit", async (event) => {
       const body = new FormData();
       body.set("image", file);
       ({ image } = await api("/api/admin/upload", { method: "POST", body }));
+    } else if (form.elements.imageUrl.value.trim()) {
+      image = form.elements.imageUrl.value.trim();
     }
     const payload = {
       title: form.elements.title.value.trim(),
@@ -137,11 +216,13 @@ deleteButton.addEventListener("click", async () => {
 });
 
 try {
-  cases = await api("/api/cases");
-  renderList();
-  if (cases.length) selectCase(cases[0].id);
-  else resetForm();
-} catch (error) {
-  status.textContent = error.message || "Не удалось загрузить кейсы";
-  message("Админка ждёт подключения Cloudflare Access, D1 и R2. После настройки кейсы появятся здесь.", true);
+  const response = await fetch("/api/admin/session", { cache: "no-store" });
+  if (response.ok) {
+    showAdmin();
+    await loadCases();
+  } else {
+    showLogin(response.status === 503 ? "Добавьте пароль ADMIN_PASSWORD в Cloudflare Pages → Settings → Variables and Secrets." : "");
+  }
+} catch {
+  showLogin("Не удалось связаться с сервером. Обновите страницу и попробуйте снова.");
 }
