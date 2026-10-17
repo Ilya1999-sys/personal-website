@@ -549,7 +549,7 @@ h1, h2, h3, h4, p { margin: 0; }
 
 @media (max-width: 767px) {
   :root {
-    --page-gutter: 8px;
+    --page-gutter: 16px;
     --section-gap: 64px;
     --space-xxs: 4px;
     --space-xs: 8px;
@@ -655,7 +655,7 @@ h1, h2, h3, h4, p { margin: 0; }
 
 @media (min-width: 450px) and (max-width: 767px) {
   :root {
-    --page-gutter: 12px;
+    --page-gutter: 16px;
     --section-gap: 80px;
     --radius-l: 20px;
     --type-h1-size: 40px;
@@ -677,7 +677,7 @@ h1, h2, h3, h4, p { margin: 0; }
 }
 
 @media (max-width: 449px) {
-  :root { --page-gutter: 8px; --section-gap: 64px; }
+  :root { --page-gutter: 16px; --section-gap: 64px; }
   .brand { font-size: var(--type-t1-size); }
   .nav-links { gap: 12px; }
   .nav-links a { font-size: var(--type-t1-size); }
