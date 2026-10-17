@@ -1,10 +1,10 @@
-const allowedCategories = new Set(["uxui", "web", "creative", "motion", "article"]);
+import { ensurePortfolioData } from "../../_lib/portfolio-data.js";
 
 function jsonError(message, status = 400) {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-function validateCase(value) {
+function validateCase(value, allowedCategories) {
   const title = String(value?.title || "").trim();
   const description = String(value?.description || "").trim();
   const image = String(value?.image || "").trim();
@@ -16,7 +16,7 @@ function validateCase(value) {
   if (!title || title.length > 160) return { error: "Заголовок обязателен и должен быть короче 160 символов" };
   if (!description || description.length > 5000) return { error: "Описание обязательно и должно быть короче 5000 символов" };
   if (!image || image.length > 2048) return { error: "Добавьте обложку проекта" };
-  if (!categories.length || categories.some((category) => !allowedCategories.has(category))) return { error: "Выберите хотя бы одну допустимую категорию" };
+  if (categories.some((category) => !allowedCategories.has(category))) return { error: "Выберите допустимые категории" };
   if (tags.length > 5 || tags.some((tag) => tag.length > 40)) return { error: "Можно указать не более пяти тегов по 40 символов" };
   if (href) {
     try {
@@ -55,9 +55,11 @@ async function readBody(request) {
 export async function onRequestPost({ request, env }) {
   if (!checkOrigin(request)) return jsonError("Запрос отклонён", 403);
   if (!env.DB) return jsonError("База данных не подключена", 503);
+  await ensurePortfolioData(env.DB);
   let body;
   try { body = await readBody(request); } catch { return jsonError("Не удалось прочитать данные формы"); }
-  const validated = validateCase(body);
+  const categoryRows = await env.DB.prepare("SELECT id FROM case_categories WHERE id != 'all'").all();
+  const validated = validateCase(body, new Set(categoryRows.results.map((category) => category.id)));
   if (validated.error) return jsonError(validated.error);
   const limited = await checkFeaturedLimit(env.DB, validated.value.featured);
   if (limited) return limited;
@@ -72,11 +74,13 @@ export async function onRequestPost({ request, env }) {
 export async function onRequestPut({ request, env }) {
   if (!checkOrigin(request)) return jsonError("Запрос отклонён", 403);
   if (!env.DB) return jsonError("База данных не подключена", 503);
+  await ensurePortfolioData(env.DB);
   let body;
   try { body = await readBody(request); } catch { return jsonError("Не удалось прочитать данные формы"); }
   const id = String(body?.id || "");
   if (!/^[a-zA-Z0-9-]{1,80}$/.test(id)) return jsonError("Некорректный ID кейса");
-  const validated = validateCase(body);
+  const categoryRows = await env.DB.prepare("SELECT id FROM case_categories WHERE id != 'all'").all();
+  const validated = validateCase(body, new Set(categoryRows.results.map((category) => category.id)));
   if (validated.error) return jsonError(validated.error);
   const limited = await checkFeaturedLimit(env.DB, validated.value.featured, id);
   if (limited) return limited;

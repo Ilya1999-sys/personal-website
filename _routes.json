@@ -4,6 +4,7 @@
     "/admin",
     "/admin/*",
     "/api/cases",
+    "/api/categories",
     "/api/admin/*",
     "/media/*"
   ],

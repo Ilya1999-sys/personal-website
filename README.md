@@ -20,11 +20,11 @@ python3 -m http.server 4173
 
 ## Админка кейсов
 
-Интерфейс находится по адресу `/admin/`. Он редактирует заголовок, описание, обложку, ссылку на проект, категории фильтрации и до пяти тегов. Pages Functions проверяют пароль и выдают подписанную HttpOnly-сессию; для входа задайте secret `ADMIN_PASSWORD` в Cloudflare Pages → Settings → Variables and Secrets. Не добавляйте пароль в Git и не отправляйте его в чат. Попытки входа ограничиваются через D1. До подключения R2 изображения можно указывать по HTTPS-ссылке или использовать локальные файлы из `images/`; загрузка файлов через форму требует R2 binding `BUCKET`.
+Интерфейс находится по адресу `/admin/`. В нём можно менять кейсы, отмечать до четырёх кейсов для главной, редактировать категории, добавлять и удалять вкладки фильтра, менять их названия и порядок, а также управлять тегами кейсов. Pages Functions проверяют пароль и выдают подписанную HttpOnly-сессию; для входа задайте secret `ADMIN_PASSWORD` в Cloudflare Pages → Settings → Variables and Secrets. Не добавляйте пароль в Git и не отправляйте его в чат. Попытки входа ограничиваются через D1. До подключения R2 изображения можно указывать по HTTPS-ссылке или использовать локальные файлы из `images/`; загрузка файлов через форму требует R2 binding `BUCKET`.
 
 Перед включением админки в Cloudflare Pages нужно:
 
-1. Создать D1 database `portfolio-cases` и применить схему и данные командами `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0001_create_cases.sql` и `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0002_featured_cases.sql`. Для существующей базы новая колонка и выбранные кейсы добавляются автоматически при запросе `/api/cases`.
+1. Создать D1 database `portfolio-cases` и применить схему и данные командами `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0001_create_cases.sql`, `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0002_featured_cases.sql` и `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0003_case_categories.sql`. Сайт также создаёт таблицу категорий при первом запросе, если она отсутствует.
 2. В Pages-проекте добавить D1 binding `DB` → `portfolio-cases`.
 3. Добавить secret `ADMIN_PASSWORD` в production environment. Используйте уникальную длинную парольную фразу; Cloudflare Access и платёжная настройка для входа не нужны.
 4. Для загрузки изображений добавить R2 bucket `portfolio-case-images` и binding `BUCKET` → `portfolio-case-images` (необязательно; это требует включить R2 billing).

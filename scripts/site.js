@@ -1,4 +1,4 @@
-import { categories, contactCards, experience, links, programs } from "./data.js";
+import { categories as staticCategories, contactCards, experience, links, programs } from "./data.js";
 
 async function loadCases() {
   const apiResponse = await fetch("/api/cases").catch(() => null);
@@ -10,7 +10,13 @@ async function loadCases() {
   return items.map((item, index) => ({ id: `case-${String(index + 1).padStart(3, "0")}`, ...item }));
 }
 
-const cases = await loadCases();
+async function loadCategories() {
+  const response = await fetch("/api/categories", { cache: "no-store" }).catch(() => null);
+  if (response?.ok) return response.json();
+  return staticCategories;
+}
+
+const [categories, cases] = await Promise.all([loadCategories(), loadCases()]);
 
 const root = document.querySelector("#site");
 const page = document.body.dataset.page || "home";
@@ -27,7 +33,7 @@ function header() {
   const contactsCurrent = page === "contacts" ? ' aria-current="page"' : "";
   return `<header class="site-nav">
     <div class="nav-left">
-      <a class="brand" href="/" aria-label="Илья Поликарпов"><span class="brand-full">Илья Поликарпов</span><span class="brand-short" aria-hidden="true">Илья П.</span></a>
+      <a class="brand" href="/" aria-label="Илья П.">Илья П.</a>
       <nav class="nav-links" aria-label="Основная навигация">
         <a href="/cases/"${casesCurrent}>Кейсы</a>
         <a href="/contacts/"${contactsCurrent}>Контакты</a>

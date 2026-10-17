@@ -1,4 +1,5 @@
 import seedCases from "../../content/cases.json";
+import { ensurePortfolioData } from "../_lib/portfolio-data.js";
 
 function parseJson(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
@@ -19,6 +20,7 @@ async function ensureFeaturedColumn(db) {
 
 export async function onRequestGet({ env }) {
   if (!env.DB) return Response.json({ error: "Cases database is not configured" }, { status: 503 });
+  await ensurePortfolioData(env.DB);
   await ensureFeaturedColumn(env.DB);
 
   // Bootstrap a newly connected D1 database from the checked-in portfolio data.
