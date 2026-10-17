@@ -24,7 +24,7 @@ python3 -m http.server 4173
 
 Перед включением админки в Cloudflare Pages нужно:
 
-1. Создать D1 database `portfolio-cases` и применить начальную схему и данные командой `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0001_create_cases.sql`.
+1. Создать D1 database `portfolio-cases` и применить схему и данные командами `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0001_create_cases.sql` и `npx wrangler d1 execute portfolio-cases --remote --file=migrations/0002_featured_cases.sql`. Для существующей базы новая колонка и выбранные кейсы добавляются автоматически при запросе `/api/cases`.
 2. В Pages-проекте добавить D1 binding `DB` → `portfolio-cases`.
 3. Добавить secret `ADMIN_PASSWORD` в production environment. Используйте уникальную длинную парольную фразу; Cloudflare Access и платёжная настройка для входа не нужны.
 4. Для загрузки изображений добавить R2 bucket `portfolio-case-images` и binding `BUCKET` → `portfolio-case-images` (необязательно; это требует включить R2 billing).

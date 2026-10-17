@@ -49,7 +49,7 @@ function showAdmin() {
 }
 
 function renderList() {
-  list.innerHTML = cases.map((item) => `<button class="admin-case-item" type="button" data-id="${escapeHtml(item.id)}" aria-current="${item.id === selectedId}">${escapeHtml(item.title)}<span>${(item.categories || []).map((id) => categoryLabels.get(id)).filter(Boolean).join(" · ")}</span></button>`).join("");
+  list.innerHTML = cases.map((item) => `<button class="admin-case-item" type="button" data-id="${escapeHtml(item.id)}" aria-current="${item.id === selectedId}">${escapeHtml(item.title)}<span>${item.featured ? "На главной · " : ""}${(item.categories || []).map((id) => categoryLabels.get(id)).filter(Boolean).join(" · ")}</span></button>`).join("");
   list.querySelectorAll("[data-id]").forEach((button) => button.addEventListener("click", () => selectCase(button.dataset.id)));
   status.textContent = `${cases.length} ${cases.length === 1 ? "кейс" : "кейсов"}`;
 }
@@ -84,6 +84,7 @@ function selectCase(id) {
   form.elements.title.value = item.title || "";
   form.elements.description.value = item.description || "";
   form.elements.href.value = item.href || "";
+  form.elements.featured.checked = Boolean(item.featured);
   form.querySelectorAll('[name="categories"]').forEach((input) => { input.checked = (item.categories || []).includes(input.value); });
   form.querySelectorAll('[name="tag"]').forEach((input, index) => { input.value = item.tags?.[index] || ""; });
   imageInput.value = "";
@@ -133,6 +134,16 @@ form.elements.imageUrl.addEventListener("input", () => {
 
 document.querySelector("#add-case").addEventListener("click", resetForm);
 
+form.elements.featured.addEventListener("change", () => {
+  const otherFeaturedCount = cases.filter((item) => item.featured && item.id !== selectedId).length;
+  if (form.elements.featured.checked && otherFeaturedCount >= 4) {
+    form.elements.featured.checked = false;
+    message("На главной уже выбраны четыре кейса. Снимите галочку с другого кейса.", true);
+    return;
+  }
+  message("");
+});
+
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = document.querySelector("#login-submit");
@@ -178,6 +189,7 @@ form.addEventListener("submit", async (event) => {
       description: form.elements.description.value.trim(),
       image,
       href: form.elements.href.value.trim(),
+      featured: form.elements.featured.checked,
       categories: [...form.querySelectorAll('[name="categories"]:checked')].map((input) => input.value),
       tags: [...form.querySelectorAll('[name="tag"]')].map((input) => input.value.trim()).filter(Boolean),
     };

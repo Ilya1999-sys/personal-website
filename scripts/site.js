@@ -6,7 +6,8 @@ async function loadCases() {
 
   const staticResponse = await fetch("/content/cases.json");
   if (!staticResponse.ok) throw new Error(`Не удалось загрузить кейсы: ${staticResponse.status}`);
-  return staticResponse.json();
+  const items = await staticResponse.json();
+  return items.map((item, index) => ({ id: `case-${String(index + 1).padStart(3, "0")}`, ...item }));
 }
 
 const cases = await loadCases();
@@ -85,21 +86,25 @@ function makeCaseCard(item, featured = false, index = 0) {
 }
 
 function homePage() {
-  const featured = [
-    cases[0], cases[1],
-    {
-      ...cases[2],
-      image: "featured-loginom.png",
-      mobile: cases[4],
-      href: cases[5].href,
-      tooltip: {
-        title: "Лендинг мероприятия",
-        description: "Обновил стиль события, добавил узнаваемые атрибуты для дальнейшего масштабирования визуала и сделал адаптивные макеты.",
-        tags: ["Веб-дизайн", "Стиль", "Адаптивы"],
-      },
-    },
-    { ...cases[4], mobile: cases[5] },
-  ];
+  const eventVisual = cases.find((item) => item.id === "case-005") || cases[4];
+  const eventLanding = cases.find((item) => item.id === "case-006") || cases[5];
+  const featured = cases.filter((item) => item.featured).slice(0, 4).map((item) => {
+    if (item.id === "case-003") {
+      return {
+        ...item,
+        image: "featured-loginom.png",
+        mobile: eventVisual,
+        href: eventLanding?.href || item.href,
+        tooltip: {
+          title: "Лендинг мероприятия",
+          description: eventLanding?.description || item.description,
+          tags: ["Веб-дизайн", "Стиль", "Адаптивы"],
+        },
+      };
+    }
+    if (item.id === "case-005") return { ...item, mobile: eventLanding || item };
+    return item;
+  });
   const makeExperienceCard = (entry, extraClass = "") => `<article class="experience-card ${entry.kind === "course" ? "experience-card--course" : ""} ${extraClass}">
       <div class="experience-card__meta"><span>${escapeHtml(entry.company)}</span><span>${escapeHtml(entry.period)}</span></div>
       <h4>${escapeHtml(entry.title)}</h4>
@@ -128,7 +133,7 @@ function homePage() {
 
     <section class="content-section featured-section" aria-labelledby="featured-title">
       <h2 class="section-title" id="featured-title">Кейсы</h2>
-      <div class="featured-stage"><div class="featured-grid"><div class="featured-track">${featured.map((item, i) => makeCaseCard(item, true, i)).join("")}</div></div></div>
+      <div class="featured-stage"${featured.length ? "" : " hidden"}><div class="featured-grid"><div class="featured-track">${featured.map((item, i) => makeCaseCard(item, true, i)).join("")}</div></div></div>
       <a class="button button-primary all-cases" href="/cases/">Смотреть все кейсы</a>
     </section>
 
@@ -218,7 +223,7 @@ const featuredGrid = document.querySelector(".featured-grid");
 const featuredTrack = document.querySelector(".featured-track");
 const allFeaturedVisible = window.matchMedia("(min-width: 1140px)");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-if (featuredStage && featuredGrid && featuredTrack && !reducedMotion.matches) {
+if (featuredStage && featuredGrid && featuredTrack) {
   let frame = 0;
   const updateFeatured = () => {
     frame = 0;
@@ -230,10 +235,23 @@ if (featuredStage && featuredGrid && featuredTrack && !reducedMotion.matches) {
     }
     const showAll = allFeaturedVisible.matches;
     const cards = [...featuredTrack.querySelectorAll(".featured-card")];
+    if (!cards.length) {
+      featuredStage.style.height = "auto";
+      return;
+    }
     const width = featuredGrid.clientWidth;
     const gap = showAll ? Math.max(12, Math.min(24, window.innerWidth * 0.0125)) : 24;
     const small = showAll ? Math.max(140, Math.min(250, window.innerWidth * 0.1302)) : 0;
-    const maxHeight = showAll ? (width - 3 * small - 3 * gap) * 9 / 16 : width * 9 / 16;
+    const otherCards = Math.max(0, cards.length - 1);
+    const maxHeight = showAll ? (width - otherCards * (small + gap)) * 9 / 16 : width * 9 / 16;
+    if (reducedMotion.matches) {
+      featuredStage.style.height = "auto";
+      featuredGrid.style.position = "static";
+      featuredGrid.style.overflow = showAll ? "visible" : "auto";
+      featuredTrack.style.transform = "";
+      if (showAll) featuredTrack.style.gridTemplateColumns = cards.map((_, index) => `${index === 0 ? width - otherCards * (small + gap) : small}px`).join(" ");
+      return;
+    }
     featuredStage.style.height = `${window.innerHeight * 3 + maxHeight}px`;
     const start = featuredStage.getBoundingClientRect().top + window.scrollY;
     const range = Math.max(1, window.innerHeight * 3);
@@ -241,7 +259,7 @@ if (featuredStage && featuredGrid && featuredTrack && !reducedMotion.matches) {
     const active = Math.min(cards.length - 1, Math.floor(progress));
     const blend = progress >= cards.length - 1 ? 0 : progress - active;
     if (showAll) {
-      const large = width - 3 * small - 3 * gap;
+      const large = width - otherCards * (small + gap);
       const sizes = cards.map((_, index) => index === active ? large + (small - large) * blend : index === active + 1 ? small + (large - small) * blend : small);
       featuredTrack.style.gridTemplateColumns = sizes.map((size) => `${Math.max(small, size)}px`).join(" ");
       featuredTrack.style.transform = "";

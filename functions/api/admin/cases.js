@@ -9,6 +9,7 @@ function validateCase(value) {
   const description = String(value?.description || "").trim();
   const image = String(value?.image || "").trim();
   const href = String(value?.href || "").trim();
+  const featured = value?.featured === true;
   const categories = Array.isArray(value?.categories) ? [...new Set(value.categories.map(String))] : [];
   const tags = Array.isArray(value?.tags) ? value.tags.map((tag) => String(tag).trim()).filter(Boolean) : [];
 
@@ -31,7 +32,13 @@ function validateCase(value) {
     } catch { return { error: "Укажите файл сайта или публичную HTTPS-ссылку на обложку" }; }
   }
 
-  return { value: { title, description, image, href, categories, tags } };
+  return { value: { title, description, image, href, categories, tags, featured } };
+}
+
+async function checkFeaturedLimit(db, featured, id = "") {
+  if (!featured) return null;
+  const selected = await db.prepare("SELECT COUNT(*) AS count FROM cases WHERE featured = 1 AND id != ?").bind(id).first();
+  return selected?.count >= 4 ? jsonError("На главной можно показывать не больше четырёх кейсов", 409) : null;
 }
 
 function checkOrigin(request) {
@@ -52,11 +59,13 @@ export async function onRequestPost({ request, env }) {
   try { body = await readBody(request); } catch { return jsonError("Не удалось прочитать данные формы"); }
   const validated = validateCase(body);
   if (validated.error) return jsonError(validated.error);
-  const { title, description, image, href, categories, tags } = validated.value;
+  const limited = await checkFeaturedLimit(env.DB, validated.value.featured);
+  if (limited) return limited;
+  const { title, description, image, href, categories, tags, featured } = validated.value;
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO cases (id, position, title, description, categories, tags, image, href) VALUES (?, (SELECT COALESCE(MAX(position), -1) + 1 FROM cases), ?, ?, ?, ?, ?, ?)",
-  ).bind(id, title, description, JSON.stringify(categories), JSON.stringify(tags), image, href).run();
+    "INSERT INTO cases (id, position, title, description, categories, tags, image, href, featured) VALUES (?, (SELECT COALESCE(MAX(position), -1) + 1 FROM cases), ?, ?, ?, ?, ?, ?, ?)",
+  ).bind(id, title, description, JSON.stringify(categories), JSON.stringify(tags), image, href, featured ? 1 : 0).run();
   return Response.json({ id }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
 
@@ -69,10 +78,12 @@ export async function onRequestPut({ request, env }) {
   if (!/^[a-zA-Z0-9-]{1,80}$/.test(id)) return jsonError("Некорректный ID кейса");
   const validated = validateCase(body);
   if (validated.error) return jsonError(validated.error);
-  const { title, description, image, href, categories, tags } = validated.value;
+  const limited = await checkFeaturedLimit(env.DB, validated.value.featured, id);
+  if (limited) return limited;
+  const { title, description, image, href, categories, tags, featured } = validated.value;
   const result = await env.DB.prepare(
-    "UPDATE cases SET title = ?, description = ?, categories = ?, tags = ?, image = ?, href = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-  ).bind(title, description, JSON.stringify(categories), JSON.stringify(tags), image, href, id).run();
+    "UPDATE cases SET title = ?, description = ?, categories = ?, tags = ?, image = ?, href = ?, featured = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+  ).bind(title, description, JSON.stringify(categories), JSON.stringify(tags), image, href, featured ? 1 : 0, id).run();
   if (!result.meta.changes) return jsonError("Кейс не найден", 404);
   return Response.json({ id }, { headers: { "Cache-Control": "no-store" } });
 }
