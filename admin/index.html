@@ -6,9 +6,9 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#e2e6e7" />
     <title>Админка кейсов — Илья Поликарпов</title>
-    <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/admin/admin.css" />
-    <script type="module" src="/admin/admin.js"></script>
+    <link rel="stylesheet" href="/styles.css?v=20261017-tags-admin" />
+    <link rel="stylesheet" href="/admin/admin.css?v=20261017-tags-admin" />
+    <script type="module" src="/admin/admin.js?v=20261017-tags-admin"></script>
   </head>
   <body class="admin-page">
     <main class="admin-shell">
@@ -23,11 +23,11 @@
         <form id="login-form"><label class="admin-field"><span>Пароль</span><input name="password" type="password" autocomplete="current-password" required /></label><button class="button button-primary" id="login-submit" type="submit">Войти</button><p id="login-message" class="form-message" role="status" aria-live="polite"></p></form>
       </section>
       <div id="admin-layout" hidden>
-        <nav class="admin-tabs" aria-label="Разделы админки">
-          <button type="button" data-admin-view="cases" aria-selected="true">Кейсы</button>
-          <button type="button" data-admin-view="categories" aria-selected="false">Категории</button>
+        <nav class="admin-tabs" role="tablist" aria-label="Разделы админки">
+          <button id="admin-tab-cases" type="button" role="tab" aria-controls="cases-management" data-admin-view="cases" aria-selected="true">Кейсы</button>
+          <button id="admin-tab-categories" type="button" role="tab" aria-controls="categories-management" data-admin-view="categories" aria-selected="false" tabindex="-1">Категории</button>
         </nav>
-        <div class="admin-layout" id="cases-management">
+        <div class="admin-layout" id="cases-management" role="tabpanel" aria-labelledby="admin-tab-cases">
           <aside class="admin-list panel" aria-label="Список кейсов">
           <div class="admin-list__heading"><h1>Кейсы</h1><button class="button button-primary" id="add-case" type="button">Добавить</button></div>
           <p class="admin-status" id="admin-status" role="status" aria-live="polite">Загружаю кейсы…</p>
@@ -47,7 +47,7 @@
           </form>
           </section>
         </div>
-        <section class="admin-category-panel panel" id="categories-management" aria-labelledby="categories-title" hidden>
+        <section class="admin-category-panel panel" id="categories-management" role="tabpanel" aria-labelledby="admin-tab-categories" hidden>
           <div class="admin-editor__heading"><div><p class="admin-eyebrow">Фильтры страницы кейсов</p><h1 id="categories-title">Категории и табы</h1></div></div>
           <p class="admin-help">Укажите порядок вкладок цифрами. «Все» остаётся первой, её название можно изменить. После сохранения изменения применятся на странице кейсов и в формах редактирования.</p>
           <div class="admin-category-list" id="admin-category-list"></div>

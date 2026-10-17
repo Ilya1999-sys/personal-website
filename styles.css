@@ -291,13 +291,13 @@ h1, h2, h3, h4, p { margin: 0; }
 .case-tooltip > span:not(.tag-list) { font-size: 14px; line-height: 1.45; }
 .case-tooltip.is-visible { display: flex; }
 
-.tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-list { display: flex; flex-wrap: wrap; gap: var(--space-xxs); }
 .tag {
-  padding: 2px 8px;
+  padding: var(--space-xxs) var(--space-s);
   border: 1px solid currentColor;
   border-radius: 999px;
-  font-size: 11px;
-  line-height: 16px;
+  font-size: var(--type-t2-size);
+  line-height: var(--type-t2-line);
   white-space: nowrap;
 }
 
@@ -425,7 +425,6 @@ h1, h2, h3, h4, p { margin: 0; }
 .case-card h3 { font-family: var(--font-heading); font-size: var(--type-h3-size); font-weight: 400; line-height: var(--type-h3-line); letter-spacing: var(--type-h3-tracking); }
 .case-card p { color: var(--text-secondary); font-size: var(--type-t3-size); line-height: var(--type-t3-line); }
 .case-card .tag-list { margin-top: auto; padding-top: 4px; }
-.case-card .tag { padding: 1px 7px; font-size: 10px; line-height: 15px; }
 .empty-state { padding: 40px 12px; color: var(--text-secondary); text-align: center; }
 
 .contacts-panel { padding: 16px; display: flex; flex-direction: column; gap: 48px; }
@@ -608,8 +607,7 @@ h1, h2, h3, h4, p { margin: 0; }
   .featured-card__mobile-copy { display: flex; flex-direction: column; gap: 8px; padding: 0 8px; }
   .featured-card__mobile-copy h3 { font-family: var(--font-heading); font-size: var(--type-h3-size); font-weight: 400; line-height: var(--type-h3-line); }
   .featured-card__mobile-copy p { color: var(--text-secondary); font-size: var(--type-t3-size); line-height: var(--type-t3-line); }
-  .featured-card__mobile-copy .tag-list { gap: 4px; }
-  .featured-card__mobile-copy .tag { padding: 0 6px; font-size: 9px; line-height: 14px; }
+  .featured-card__mobile-copy .tag-list { gap: var(--space-xxs); }
   .case-tooltip { display: none !important; }
   .all-cases { min-height: 38px; padding: 8px 12px; font-size: 12px; }
   .timeline { gap: 12px; }
@@ -644,7 +642,6 @@ h1, h2, h3, h4, p { margin: 0; }
   .case-card__body { gap: 6px; }
   .case-card h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-line); }
   .case-card p { font-size: var(--type-t3-size); line-height: var(--type-t3-line); }
-  .case-card .tag { font-size: 10px; }
   .contacts-panel { padding: 8px; gap: 24px; border-radius: 24px; }
   .contact-intro { gap: 16px; }
   .contact-intro h1 { font-size: var(--type-h1-size); line-height: var(--type-h1-line); }

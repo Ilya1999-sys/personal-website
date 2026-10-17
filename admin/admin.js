@@ -103,10 +103,16 @@ async function loadCategories() {
 }
 
 function switchAdminView(view) {
-  const showCases = view === "cases";
+  const activeView = view === "categories" ? "categories" : "cases";
+  const showCases = activeView === "cases";
+  adminLayout.dataset.activeView = activeView;
   casesManagement.hidden = !showCases;
   categoriesManagement.hidden = showCases;
-  document.querySelectorAll("[data-admin-view]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.adminView === view)));
+  document.querySelectorAll("[data-admin-view]").forEach((button) => {
+    const selected = button.dataset.adminView === activeView;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  });
 }
 
 function imageSource(image) {
