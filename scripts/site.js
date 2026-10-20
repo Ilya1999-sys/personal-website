@@ -22,6 +22,26 @@ const root = document.querySelector("#site");
 const page = document.body.dataset.page || "home";
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
+// Keep short Russian prepositions and conjunctions with the following word.
+// This runs on rendered text nodes, so it also covers content added later by the page.
+const shortFunctionWords = /(^|[^\p{L}\p{N}_])(а|и|в|к|о|с|у|за|на|по|из|от|до|во|со|ко|об|без|для|над|под|при|про)([ \t\r\n]+)/giu;
+const excludedTypographyElements = "script, style, textarea, input, code, pre, kbd, samp, svg, [contenteditable='true'], .no-nbsp";
+
+function fixWidowsInTextNode(node) {
+  if (node.nodeType !== Node.TEXT_NODE || !node.nodeValue || node.parentElement?.closest(excludedTypographyElements)) return;
+  node.nodeValue = node.nodeValue.replace(shortFunctionWords, "$1$2\u00a0");
+}
+
+function fixWidowsInTree(rootNode) {
+  if (rootNode.nodeType === Node.TEXT_NODE) {
+    fixWidowsInTextNode(rootNode);
+    return;
+  }
+
+  const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) fixWidowsInTextNode(walker.currentNode);
+}
+
 function icon(name) {
   if (name === "telegram") return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#229ED9"/><path d="m9 19.1 20-7.7c.9-.3 1.7.2 1.4 1.5l-3.4 16.2c-.2 1.1-.9 1.4-1.8.9l-5.4-4-2.6 2.5c-.3.3-.5.5-1 .5l.4-5.5L27 14c.5-.4-.1-.7-.7-.3l-12.8 8.1-5.5-1.7c-1.2-.4-1.2-1.2 1-2Z" fill="#fff"/></svg>';
   if (name === "email") return '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 11.5h30v19H5z" fill="#fff"/><path d="M5 12l15 12 15-12" fill="none" stroke="#4285f4" stroke-width="4"/><path d="M5 12v18" stroke="#34a853" stroke-width="4"/><path d="M35 12v18" stroke="#fbbc04" stroke-width="4"/><path d="m5 12 8 6" stroke="#ea4335" stroke-width="4"/><path d="m35 12-8 6" stroke="#ea4335" stroke-width="4"/></svg>';
@@ -199,6 +219,14 @@ function contactsPage() {
 }
 
 root.innerHTML = page === "cases" ? casesPage() : page === "contacts" ? contactsPage() : homePage();
+
+fixWidowsInTree(root);
+const typographyObserver = new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    for (const addedNode of mutation.addedNodes) fixWidowsInTree(addedNode);
+  }
+});
+typographyObserver.observe(document.body, { childList: true, subtree: true });
 
 document.querySelectorAll(".filter-button").forEach((button) => {
   button.addEventListener("click", () => {
