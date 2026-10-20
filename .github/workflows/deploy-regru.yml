@@ -77,9 +77,8 @@ jobs:
           port: ${{ vars.REGRU_FTP_PORT }}
           server-dir: ${{ vars.REGRU_FTP_SERVER_DIR }}
           local-dir: ./regru-dist/
-          # On the first push, stay in preview mode until the remote path is confirmed.
-          # Set REGRU_FTP_DRY_RUN to "false" to enable automatic publishing on main.
-          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || (github.event_name != 'workflow_dispatch' && vars.REGRU_FTP_DRY_RUN != 'false') }}
+          # Pushes to main publish the site; manual runs default to preview mode.
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
           dangerous-clean-slate: false
           exclude: |
             **/.git*

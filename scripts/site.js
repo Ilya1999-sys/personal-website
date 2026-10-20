@@ -129,7 +129,7 @@ function homePage() {
     <section class="hero-panel panel">
       ${header()}
       <div class="hero-copy">
-        <img class="hero-avatar" src="/images/portrait-home.png?v=20261020" alt="Илья Поликарпов" width="160" height="160" />
+        <img class="hero-avatar" src="/images/portrait.jpeg?v=20261020-hq" alt="Илья Поликарпов" width="160" height="160" />
         <div class="hero-copy__text">
           <h1>Создаю цифровые продукты и отвечаю за весь процесс дизайна: от идеи до продакшн-решения</h1>
           <p>Я UX/UI-дизайнер с акцентом на десктоп-интерфейсы B2B и B2C приложений. Помимо этого делаю дизайн сайтов и лендингов, визуал для мероприятий и соцсетей, вайбкожу с Codex, презентации. В общем, беру задачи, где надо разобраться, продумать решение и реализовать его, а не сделать в стол.</p>
