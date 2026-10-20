@@ -6,7 +6,8 @@
     "/api/cases",
     "/api/categories",
     "/api/admin/*",
-    "/media/*"
+    "/media/*",
+    "/regru-backend/*"
   ],
   "exclude": []
 }

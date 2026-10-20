@@ -1,2 +1,7 @@
 .DS_Store
 .wrangler/
+regru-backend/config.php
+regru-backend/migration/portfolio.json
+regru-backend/migration/uploads/
+regru-dist/
+regru-dist.zip

@@ -338,7 +338,7 @@ try {
     await loadCategories();
     await loadCases();
   } else {
-    showLogin(response.status === 503 ? "Добавьте пароль ADMIN_PASSWORD в Cloudflare Pages → Settings → Variables and Secrets." : "");
+    showLogin(response.status === 503 ? "Настройте пароль админки в конфигурации хостинга." : "");
   }
 } catch {
   showLogin("Не удалось связаться с сервером. Обновите страницу и попробуйте снова.");

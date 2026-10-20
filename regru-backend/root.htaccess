@@ -1,0 +1,14 @@
+Options -Indexes
+DirectoryIndex index.html
+RewriteEngine On
+
+# Keep source-only files out of the public site.
+RewriteRule ^(?:functions|migrations|regru-backend|\.git)(?:/|$) - [F,L,NC]
+
+# Send extensionless API requests to the PHP router without redirecting POSTs.
+RewriteCond %{REQUEST_URI} !^/api/index\.php$ [NC]
+RewriteRule ^api(?:/.*)?$ api/index.php [QSA,L,NC]
+
+<FilesMatch "^(?:\.htaccess|\.gitignore|\.ftp-deploy-sync-state\.json)$">
+  Require all denied
+</FilesMatch>

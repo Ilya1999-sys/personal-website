@@ -1,0 +1,90 @@
+name: Deploy website to REG.RU
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only show which files would be uploaded
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regru-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the REG.RU web root
+        run: node scripts/package-regru.mjs
+
+      - name: Check deployment settings
+        env:
+          FTP_SERVER: ${{ secrets.REGRU_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REGRU_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REGRU_FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.REGRU_FTP_PROTOCOL }}
+          FTP_PORT: ${{ vars.REGRU_FTP_PORT }}
+          FTP_SERVER_DIR: ${{ vars.REGRU_FTP_SERVER_DIR }}
+        run: |
+          set -eu
+          missing=0
+          for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_PROTOCOL FTP_PORT FTP_SERVER_DIR; do
+            if [ -z "$(printenv "$name")" ]; then
+              echo "::error::GitHub secret or variable for $name is not configured. See regru-backend/README.md."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          case "$FTP_PROTOCOL" in
+            ftp|ftps|ftps-legacy) ;;
+            *) echo "::error::REGRU_FTP_PROTOCOL must be ftp, ftps, or ftps-legacy."; exit 1 ;;
+          esac
+          case "$FTP_PORT" in
+            *[!0-9]*|'') echo "::error::REGRU_FTP_PORT must be a port number."; exit 1 ;;
+          esac
+          case "$FTP_SERVER_DIR" in
+            */) ;;
+            *) echo "::error::REGRU_FTP_SERVER_DIR must end with a slash."; exit 1 ;;
+          esac
+
+      - name: Publish files
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.REGRU_FTP_SERVER }}
+          username: ${{ secrets.REGRU_FTP_USERNAME }}
+          password: ${{ secrets.REGRU_FTP_PASSWORD }}
+          protocol: ${{ vars.REGRU_FTP_PROTOCOL }}
+          port: ${{ vars.REGRU_FTP_PORT }}
+          server-dir: ${{ vars.REGRU_FTP_SERVER_DIR }}
+          local-dir: ./regru-dist/
+          # On the first push, stay in preview mode until the remote path is confirmed.
+          # Set REGRU_FTP_DRY_RUN to "false" to enable automatic publishing on main.
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || (github.event_name != 'workflow_dispatch' && vars.REGRU_FTP_DRY_RUN != 'false') }}
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            api/config.php
+            api/initial-data.json
+            uploads/cases/**
