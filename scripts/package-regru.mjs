@@ -45,6 +45,9 @@ try {
   console.warn("Cloudflare export не найден: использую кейсы из content/cases.json и категории по умолчанию.");
 }
 await writeFile(path.join(outputDir, "api", "initial-data.json"), JSON.stringify(initialData, null, 2) + "\n");
+// The public page uses this snapshot if the PHP API is temporarily unavailable.
+await mkdir(path.join(outputDir, "content"), { recursive: true });
+await writeFile(path.join(outputDir, "content", "cases.json"), JSON.stringify(initialData.cases || [], null, 2) + "\n");
 try {
   await cp(path.join(siteDir, "regru-backend", "migration", "uploads"), path.join(outputDir, "uploads"), { recursive: true, force: true });
 } catch (error) {
