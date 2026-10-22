@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteDir = path.resolve(scriptDir, "..");
 const outputDir = path.resolve(process.argv[2] || path.join(siteDir, "regru-dist"));
-const include = ["index.html", "contacts", "cases", "styles.css", "images", "fonts", "admin"];
+const include = ["index.html", "contacts", "cases", "styles.css", "images", "fonts", "admin", "favicon.svg", "favicon-32.png", "apple-touch-icon.png"];
 
 await rm(outputDir, { recursive: true, force: true });
 await mkdir(outputDir, { recursive: true });
