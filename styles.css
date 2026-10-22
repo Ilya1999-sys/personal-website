@@ -308,9 +308,9 @@ h1, h2, h3, h4, p { margin: 0; }
 .timeline-early { display: flex; flex-direction: column; gap: 12px; }
 .timeline-late { display: grid; grid-template-columns: 43% minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 12px; align-items: stretch; }
 .timeline-late .timeline-year { grid-column: 1; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; }
-.timeline-late .timeline-year--2024 { grid-row: 1; }
+.timeline-late .timeline-year--2026 { grid-row: 1; }
 .timeline-late .timeline-year--2025 { grid-row: 2; }
-.timeline-late .timeline-year--2026 { grid-row: 3; }
+.timeline-late .timeline-year--2024 { grid-row: 3; }
 .timeline-late .experience-grid { grid-template-columns: minmax(0, 1fr); }
 .timeline-late .experience-card--tilda { grid-column: 2; grid-row: 2 / 4; }
 .timeline-late .experience-card--loginom { grid-column: 3; grid-row: 1 / 4; }
@@ -535,10 +535,8 @@ h1, h2, h3, h4, p { margin: 0; }
   .timeline-year, .timeline-late .timeline-year { display: flex; flex-direction: column; gap: 16px; }
   .timeline-year > h3 { font-size: var(--type-h1-size); }
   .timeline-year--2021, .timeline-year--2022 { grid-column: 1 / -1; }
-  .timeline-year--2023 { grid-column: 1; }
-  .timeline-late .timeline-year--2024 { grid-column: 2; grid-row: auto; }
-  .timeline-late .timeline-year--2025 { grid-column: 1; grid-row: auto; }
-  .timeline-late .timeline-year--2026 { grid-column: 2; grid-row: auto; }
+  .timeline-year--2023, .timeline-late .timeline-year--2024, .timeline-late .timeline-year--2026 { grid-column: 1; grid-row: auto; }
+  .timeline-late .timeline-year--2025 { grid-column: 2; grid-row: auto; }
   .timeline-early .experience-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .timeline-late .experience-grid { grid-template-columns: minmax(0, 1fr); }
   .timeline .experience-card--tilda, .timeline .experience-card--loginom { grid-column: 1 / -1; grid-row: auto; }

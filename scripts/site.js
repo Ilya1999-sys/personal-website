@@ -140,8 +140,8 @@ function homePage() {
   const yearRows = (rows, extraClass = "") => rows.map(({ year, entries }) => `<div class="timeline-year ${extraClass} timeline-year--${year}">
     <h3>${escapeHtml(year)}</h3><div class="experience-grid">${entries.map((entry) => makeExperienceCard(entry)).join("")}</div>
   </div>`).join("");
-  const earlyYears = years.filter(({ year }) => Number(year) <= 2023);
-  const lateYears = years.filter(({ year }) => Number(year) >= 2024);
+  const earlyYears = years.filter(({ year }) => Number(year) <= 2023).reverse();
+  const lateYears = years.filter(({ year }) => Number(year) >= 2024).reverse();
   const tilda = experience.flatMap(({ entries }) => entries).find((entry) => entry.company === "Tilda Education");
   const loginom = experience.flatMap(({ entries }) => entries).find((entry) => entry.company === "Loginom");
   const marqueeItems = programs.map((program) => `<span class="marquee-item">${escapeHtml(program)}<i aria-hidden="true"></i></span>`).join("");
@@ -166,8 +166,8 @@ function homePage() {
     <section class="content-section experience-section" aria-labelledby="experience-title">
       <h2 class="section-title" id="experience-title">5 лет в дизайне</h2>
       <div class="timeline">
-        <div class="timeline-early">${yearRows(earlyYears)}</div>
         <div class="timeline-late">${yearRows(lateYears, "timeline-year--late")}${makeExperienceCard(tilda, "experience-card--tilda")}${makeExperienceCard(loginom, "experience-card--loginom")}</div>
+        <div class="timeline-early">${yearRows(earlyYears)}</div>
       </div>
     </section>
 
