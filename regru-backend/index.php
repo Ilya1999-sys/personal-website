@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 const SESSION_LIFETIME = 604800;
+const GOOGLE_LIFETIME = 43200;
+const GOOGLE_CALLBACK = 'https://ilyapolikarpov.ru/api/admin/google/callback';
 const MAX_JSON_BODY = 1048576;
 const MAX_IMAGE_BYTES = 10485760;
 
@@ -176,8 +178,12 @@ function sameOrigin(): bool
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     $host = $_SERVER['HTTP_HOST'] ?? '';
-    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-    return $origin !== '' && strtolower($origin) === strtolower(($secure ? 'https://' : 'http://') . $host);
+    return $origin !== '' && strtolower($origin) === strtolower((isHttps() ? 'https://' : 'http://') . $host);
+}
+
+function isHttps(): bool
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 }
 
 function requireOrigin(): void
@@ -187,7 +193,7 @@ function requireOrigin(): void
 
 function requireAdmin(array $config): void
 {
-    startSession();
+    requireGoogleAccess($config);
     if (empty($_SESSION['portfolio_admin']) || (int) ($_SESSION['portfolio_admin_exp'] ?? 0) <= time()) {
         session_write_close();
         fail('Войдите в админку, чтобы продолжить', 401);
@@ -198,11 +204,89 @@ function requireAdmin(array $config): void
 function startSession(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
-    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-    session_name('portfolio_admin');
-    session_set_cookie_params(['lifetime' => SESSION_LIFETIME, 'path' => '/api/admin', 'secure' => $secure, 'httponly' => true, 'samesite' => 'Strict']);
+    // Lax lets the browser return the state cookie on Google's top-level GET
+    // callback. Admin mutations still require a same-origin Origin header.
+    session_name('portfolio_secure_admin');
+    session_set_cookie_params(['lifetime' => SESSION_LIFETIME, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
     ini_set('session.use_strict_mode', '1');
+    ini_set('session.gc_maxlifetime', (string) SESSION_LIFETIME);
     session_start();
+}
+
+function googleConfigured(array $config): bool
+{
+    foreach (['google_client_id', 'google_client_secret', 'google_admin_email'] as $key) {
+        $value = trim((string) ($config[$key] ?? ''));
+        if ($value === '' || str_starts_with($value, 'YOUR_')) return false;
+    }
+    return filter_var($config['google_admin_email'], FILTER_VALIDATE_EMAIL) !== false;
+}
+
+function googleAccess(array $config): bool
+{
+    if (!googleConfigured($config)) return false;
+    startSession();
+    return hash_equals(strtolower((string) $config['google_admin_email']), strtolower((string) ($_SESSION['google_email'] ?? '')))
+        && (int) ($_SESSION['google_verified_until'] ?? 0) > time();
+}
+
+function requireGoogleAccess(array $config): void
+{
+    if (!googleConfigured($config)) fail('Вход через Google ещё не настроен', 503);
+    if (!googleAccess($config)) fail('Доступ запрещён', 403);
+}
+
+function adminUnavailable(array $config): never
+{
+    $ready = googleConfigured($config);
+    http_response_code($ready ? 403 : 503);
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-Robots-Tag: noindex, nofollow');
+    header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
+    $action = $ready ? '<a href="/api/admin/google/start">Войти через Google</a>' : '';
+    echo '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Страница недоступна</title><style>body{font:18px/1.5 system-ui,sans-serif;background:#e2e6e7;color:#152442;min-height:100vh;display:grid;place-items:center;margin:0}main{background:#fff;border-radius:24px;padding:40px;max-width:480px;margin:20px}h1{font-size:32px;margin:0 0 12px}a{display:inline-block;margin-top:16px;color:#0647f8}</style><main><h1>Страница недоступна</h1><p>Для доступа к админке подтвердите аккаунт Google.</p>' . $action . '</main></html>';
+    exit;
+}
+
+function googleRequest(string $url, ?array $post = null, ?string $bearer = null): array
+{
+    if (!function_exists('curl_init')) fail('Вход через Google недоступен на сервере', 503);
+    $curl = curl_init($url);
+    $headers = ['Accept: application/json'];
+    if ($bearer !== null) $headers[] = 'Authorization: Bearer ' . $bearer;
+    if ($post !== null) $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
+    ]);
+    if ($post !== null) {
+        curl_setopt($curl, CURLOPT_POST, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($post, '', '&', PHP_QUERY_RFC3986));
+    }
+    $result = curl_exec($curl);
+    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    curl_close($curl);
+    if (!is_string($result) || $status !== 200 || strlen($result) > 65536) fail('Не удалось подтвердить вход через Google', 502);
+    $decoded = json_decode($result, true);
+    if (!is_array($decoded)) fail('Не удалось подтвердить вход через Google', 502);
+    return $decoded;
+}
+
+function serveAdminFile(string $path, array $config): never
+{
+    if (!googleAccess($config)) adminUnavailable($config);
+    $name = trim(substr($path, strlen('admin')), '/');
+    if ($name === '') $name = 'index.html';
+    $types = ['index.html' => 'text/html', 'admin.css' => 'text/css', 'admin.js' => 'text/javascript', 'detail-editor.js' => 'text/javascript'];
+    if (!isset($types[$name]) || !in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)) fail('Маршрут не найден', 404);
+    $file = dirname(__DIR__) . '/admin/' . $name;
+    if (!is_file($file)) fail('Маршрут не найден', 404);
+    header('Content-Type: ' . $types[$name] . '; charset=utf-8');
+    header('X-Robots-Tag: noindex, nofollow');
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') readfile($file);
+    exit;
 }
 
 function validLabel(mixed $value): ?string
@@ -300,6 +384,73 @@ function rowsToCases(PDO $db): array
 }
 
 try {
+    if ($path === 'admin' || str_starts_with($path, 'admin/') || str_starts_with($path, 'api/admin/')) {
+        if (!isHttps()) {
+            if ($method === 'GET' && ($path === 'admin' || str_starts_with($path, 'admin/') || $path === 'api/admin/google/start')) {
+                header('Location: https://ilyapolikarpov.ru/' . $path, true, 302);
+                exit;
+            }
+            fail('Для входа нужен HTTPS', 403);
+        }
+    }
+    if ($path === 'admin' || str_starts_with($path, 'admin/')) serveAdminFile($path, $config);
+
+    if ($path === 'api/admin/google/start' && $method === 'GET') {
+        if (!googleConfigured($config)) fail('Вход через Google ещё не настроен', 503);
+        startSession();
+        $state = bin2hex(random_bytes(32));
+        $verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        unset($_SESSION['google_email'], $_SESSION['google_verified_until'], $_SESSION['portfolio_admin'], $_SESSION['portfolio_admin_exp']);
+        $_SESSION['google_oauth_state'] = $state;
+        $_SESSION['google_oauth_verifier'] = $verifier;
+        $_SESSION['google_oauth_started'] = time();
+        session_write_close();
+        $params = [
+            'client_id' => (string) $config['google_client_id'],
+            'redirect_uri' => GOOGLE_CALLBACK,
+            'response_type' => 'code',
+            'scope' => 'openid email',
+            'state' => $state,
+            'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='),
+            'code_challenge_method' => 'S256',
+            'prompt' => 'select_account',
+        ];
+        header('Location: https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986), true, 302);
+        exit;
+    }
+    if ($path === 'api/admin/google/callback' && $method === 'GET') {
+        if (!googleConfigured($config)) adminUnavailable($config);
+        startSession();
+        $expected = (string) ($_SESSION['google_oauth_state'] ?? '');
+        $verifier = (string) ($_SESSION['google_oauth_verifier'] ?? '');
+        $started = (int) ($_SESSION['google_oauth_started'] ?? 0);
+        unset($_SESSION['google_oauth_state'], $_SESSION['google_oauth_verifier'], $_SESSION['google_oauth_started']);
+        $state = is_string($_GET['state'] ?? null) ? $_GET['state'] : '';
+        $code = is_string($_GET['code'] ?? null) ? $_GET['code'] : '';
+        if ($expected === '' || !hash_equals($expected, $state) || $verifier === '' || $started < time() - 600 || $code === '' || strlen($code) > 4096) adminUnavailable($config);
+        $token = googleRequest('https://oauth2.googleapis.com/token', [
+            'code' => $code,
+            'client_id' => (string) $config['google_client_id'],
+            'client_secret' => (string) $config['google_client_secret'],
+            'redirect_uri' => GOOGLE_CALLBACK,
+            'grant_type' => 'authorization_code',
+            'code_verifier' => $verifier,
+        ]);
+        $accessToken = (string) ($token['access_token'] ?? '');
+        if ($accessToken === '' || !hash_equals('Bearer', (string) ($token['token_type'] ?? ''))) adminUnavailable($config);
+        $user = googleRequest('https://openidconnect.googleapis.com/v1/userinfo', null, $accessToken);
+        $email = strtolower((string) ($user['email'] ?? ''));
+        if (($user['email_verified'] ?? false) !== true || ($user['sub'] ?? '') === '' || !hash_equals(strtolower((string) $config['google_admin_email']), $email)) adminUnavailable($config);
+        session_regenerate_id(true);
+        $_SESSION['google_email'] = $email;
+        $_SESSION['google_verified_until'] = time() + GOOGLE_LIFETIME;
+        unset($_SESSION['portfolio_admin'], $_SESSION['portfolio_admin_exp']);
+        session_write_close();
+        header('Referrer-Policy: no-referrer');
+        header('Location: /admin/', true, 303);
+        exit;
+    }
+
     if ($path === 'api/cases' && $method === 'GET') respond(rowsToCases(database($config)));
     if ($path === 'api/categories' && $method === 'GET') {
         $rows = database($config)->query('SELECT id,label,position FROM case_categories ORDER BY position,id')->fetchAll();
@@ -307,6 +458,7 @@ try {
     }
 
     if ($path === 'api/admin/session' && $method === 'GET') {
+        requireGoogleAccess($config);
         if (empty($config['admin_password_hash']) || $config['admin_password_hash'] === 'REPLACE_WITH_PASSWORD_HASH') {
             respond(['authenticated' => false, 'configured' => false], 503);
         }
@@ -319,11 +471,12 @@ try {
         startSession();
         $_SESSION = [];
         session_destroy();
-        setcookie('portfolio_admin', '', ['expires' => time() - 3600, 'path' => '/api/admin', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
+        setcookie('portfolio_secure_admin', '', ['expires' => time() - 3600, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
         respond(null, 204);
     }
     if ($path === 'api/admin/login' && $method === 'POST') {
         requireOrigin();
+        requireGoogleAccess($config);
         if (empty($config['admin_password_hash']) || $config['admin_password_hash'] === 'REPLACE_WITH_PASSWORD_HASH') fail('Сначала задайте пароль админки в api/config.php', 503);
         $body = bodyJson();
         $password = (string) ($body['password'] ?? '');

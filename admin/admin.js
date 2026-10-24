@@ -35,6 +35,7 @@ async function api(url, options = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && url.startsWith("/api/admin/")) showLogin("Сессия завершена. Войдите снова.");
+    if (response.status === 403 && url.startsWith("/api/admin/")) window.location.replace("/admin/");
     throw new Error(data.error || `Ошибка сервера: ${response.status}`);
   }
   return data;
@@ -276,7 +277,7 @@ loginForm.addEventListener("submit", async (event) => {
 
 logoutButton.addEventListener("click", async () => {
   try { await fetch("/api/admin/session", { method: "DELETE", cache: "no-store" }); } catch { /* The server session still expires after seven days. */ }
-  showLogin("Вы вышли из админки.");
+  window.location.replace("/admin/");
 });
 
 form.addEventListener("submit", async (event) => {

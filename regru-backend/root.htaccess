@@ -5,6 +5,10 @@ RewriteEngine On
 # Keep source-only files out of the public site.
 RewriteRule ^(?:functions|migrations|regru-backend|\.git)(?:/|$) - [F,L,NC]
 
+# Serve every admin file through PHP so an unauthenticated visitor cannot load
+# even the login form or its scripts directly.
+RewriteRule ^admin(?:/.*)?$ api/index.php [QSA,L,NC]
+
 # Send extensionless API requests to the PHP router without redirecting POSTs.
 RewriteCond %{REQUEST_URI} !^/api/index\.php$ [NC]
 RewriteRule ^api(?:/.*)?$ api/index.php [QSA,L,NC]
