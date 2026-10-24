@@ -1,5 +1,5 @@
 import { categories as staticCategories, contactCards, experience, links, programs } from "./data.js";
-import { caseDetailPage } from "./case-pages.js";
+import { caseDetailPage } from "./case-pages.js?v=20261024-figma-fidelity";
 
 async function loadCases() {
   const apiResponse = await fetch("/api/cases").catch(() => null);
@@ -50,7 +50,7 @@ function icon(name) {
 }
 
 function header() {
-  const casesCurrent = page === "cases" ? ' aria-current="page"' : "";
+  const casesCurrent = ["cases", "loginom-case", "event-case"].includes(page) ? ' aria-current="page"' : "";
   const contactsCurrent = page === "contacts" ? ' aria-current="page"' : "";
   return `<header class="site-nav">
     <div class="nav-left">
