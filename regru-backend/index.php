@@ -158,8 +158,8 @@ function database(array $config): PDO
         }
         return $pdo;
     } catch (PDOException $error) {
-        error_log('Portfolio database error: ' . $error->getMessage());
-        fail('Не удалось подготовить базу. Этап: ' . $stage . ', SQLSTATE: ' . $error->getCode(), 503);
+        error_log('Portfolio database error at ' . $stage . ': ' . $error->getMessage());
+        fail('Не удалось подключиться к MySQL или подготовить таблицы. Проверьте настройки базы.', 503);
     }
 }
 
