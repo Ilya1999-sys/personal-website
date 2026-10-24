@@ -1,5 +1,6 @@
 import seedCases from "../../content/cases.json";
 import { ensurePortfolioData } from "../_lib/portfolio-data.js";
+import { defaultCaseDetails } from "../../scripts/case-detail-data.js";
 
 function parseJson(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
@@ -28,7 +29,7 @@ export async function onRequestGet({ env }) {
   const { results: counts } = await env.DB.prepare("SELECT COUNT(*) AS count FROM cases").all();
   if (!counts[0]?.count) {
     await env.DB.batch(seedCases.map((item, index) => env.DB.prepare(
-      "INSERT OR IGNORE INTO cases (id, position, title, description, categories, tags, image, href, featured) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO cases (id, position, title, description, categories, tags, image, href, detail_json, featured) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(
       `case-${String(index + 1).padStart(3, "0")}`,
       index,
@@ -37,16 +38,18 @@ export async function onRequestGet({ env }) {
       JSON.stringify(item.categories),
       JSON.stringify(item.tags),
       `/images/${item.image}`,
-      item.href || "",
+      defaultCaseDetails[`case-${String(index + 1).padStart(3, "0")}`] ? `/cases/${defaultCaseDetails[`case-${String(index + 1).padStart(3, "0")}`].slug}/` : item.href || "",
+      defaultCaseDetails[`case-${String(index + 1).padStart(3, "0")}`] ? JSON.stringify(defaultCaseDetails[`case-${String(index + 1).padStart(3, "0")}`]) : null,
       item.featured ? 1 : 0,
     )));
   }
 
   const { results } = await env.DB.prepare(
-    "SELECT id, title, description, categories, tags, image, href, featured FROM cases ORDER BY position ASC, created_at ASC",
+    "SELECT id, title, description, categories, tags, image, href, detail_json, featured FROM cases ORDER BY position ASC, created_at ASC",
   ).all();
-  return Response.json(results.map((item) => ({
+  return Response.json(results.map(({ detail_json, ...item }) => ({
     ...item,
+    detail: parseJson(detail_json, null),
     featured: Boolean(item.featured),
     categories: parseJson(item.categories, []),
     tags: parseJson(item.tags, []),

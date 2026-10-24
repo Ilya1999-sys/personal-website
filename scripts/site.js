@@ -1,5 +1,6 @@
 import { categories as staticCategories, contactCards, experience, links, programs } from "./data.js";
-import { caseDetailPage } from "./case-pages.js?v=20261024-figma-fidelity";
+import { caseDetailPage } from "./case-pages.js?v=20261024-case-template";
+import { caseHrefFor } from "./case-detail-data.js";
 
 async function loadCases() {
   const apiResponse = await fetch("/api/cases").catch(() => null);
@@ -50,7 +51,7 @@ function icon(name) {
 }
 
 function header() {
-  const casesCurrent = ["cases", "loginom-case", "event-case"].includes(page) ? ' aria-current="page"' : "";
+  const casesCurrent = ["cases", "loginom-case", "event-case", "case-detail"].includes(page) ? ' aria-current="page"' : "";
   const contactsCurrent = page === "contacts" ? ' aria-current="page"' : "";
   return `<header class="site-nav">
     <div class="nav-left">
@@ -104,8 +105,9 @@ function makeCaseCard(item, featured = false, index = 0) {
   const tooltipTags = (tooltip.tags || tagNames).slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
   const mobile = item.mobile || item;
   const cardClass = featured ? `featured-card featured-card--${index + 1}` : "case-card";
-  const internal = item.href?.startsWith("/cases/");
-  return `<a class="${cardClass}" href="${escapeHtml(item.href || "#")}"${internal ? "" : ' target="_blank" rel="noopener noreferrer"'} data-category-ids="${escapeHtml(categoryIds.join(" "))}" data-featured="${featured}">
+  const href = caseHrefFor(item);
+  const internal = href.startsWith("/cases/");
+  return `<a class="${cardClass}" href="${escapeHtml(href)}"${internal ? "" : ' target="_blank" rel="noopener noreferrer"'} data-category-ids="${escapeHtml(categoryIds.join(" "))}" data-featured="${featured}">
     <picture>${featured && mobile.image !== item.image ? `<source media="(max-width: 767px)" srcset="${escapeHtml(caseImageSrc(mobile.image))}" />` : ""}<img src="${escapeHtml(caseImageSrc(item.image))}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" /></picture>
     ${featured ? `<div class="featured-card__mobile-copy"><h3>${escapeHtml(mobile.title)}</h3><p>${escapeHtml(mobile.description)}</p><div class="tag-list">${[...new Set([...(Array.isArray(mobile.categories) ? mobile.categories : []).map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...(Array.isArray(mobile.tags) ? mobile.tags : [])])].slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div></div>` : ""}
     ${featured ? `<span class="featured-card__label">${title}</span>` : `<div class="case-card__body"><h3>${title}</h3><p>${escapeHtml(item.description)}</p><div class="tag-list">${tags}</div></div>`}
@@ -115,10 +117,11 @@ function makeCaseCard(item, featured = false, index = 0) {
 
 function homePage() {
   const featuredOrder = ["case-003", "case-002", "case-005", "case-001"];
-  const featured = featuredOrder.map((id) => cases.find((item) => item.id === id)).filter(Boolean).map((item) => ({
-    ...item,
-    href: item.id === "case-003" ? "/cases/loginom-features/" : item.id === "case-005" ? "/cases/event-visual/" : item.href,
-  }));
+  const featured = cases.filter((item) => item.featured).sort((a, b) => {
+    const aRank = featuredOrder.indexOf(a.id);
+    const bRank = featuredOrder.indexOf(b.id);
+    return (aRank < 0 ? featuredOrder.length : aRank) - (bRank < 0 ? featuredOrder.length : bRank);
+  });
   const makeExperienceCard = (entry, extraClass = "") => `<article class="experience-card ${entry.kind === "course" ? "experience-card--course" : ""} ${extraClass}">
       <div class="experience-card__meta"><span>${escapeHtml(entry.company)}</span><span>${escapeHtml(entry.period)}</span></div>
       <h4>${escapeHtml(entry.title)}</h4>
@@ -178,10 +181,7 @@ function casesPage() {
     const aRank = casesOrder.indexOf(a.id);
     const bRank = casesOrder.indexOf(b.id);
     return (aRank < 0 ? casesOrder.length : aRank) - (bRank < 0 ? casesOrder.length : bRank);
-  }).map((item) => ({
-    ...item,
-    href: item.id === "case-003" ? "/cases/loginom-features/" : item.id === "case-005" ? "/cases/event-visual/" : item.href,
-  }));
+  });
   return `<main class="page-content cases-content">
     <section class="page-heading panel">
       ${header()}
@@ -215,7 +215,13 @@ function contactsPage() {
   </main>`;
 }
 
-root.innerHTML = page === "cases" ? casesPage() : page === "contacts" ? contactsPage() : page === "loginom-case" ? caseDetailPage("loginom", header, footer) : page === "event-case" ? caseDetailPage("event", header, footer) : homePage();
+const detailSlug = location.pathname.match(/^\/cases\/([a-z0-9-]+)\/?$/)?.[1];
+const detailCase = detailSlug ? cases.find((item) => caseHrefFor(item) === `/cases/${detailSlug}/`) : null;
+root.innerHTML = page === "cases" ? casesPage() : page === "contacts" ? contactsPage() : ["loginom-case", "event-case", "case-detail"].includes(page) ? caseDetailPage(detailCase, header, footer) : homePage();
+if (page === "case-detail" && detailCase?.detail) {
+  document.title = `${detailCase.detail.title} — Илья Поликарпов`;
+  document.querySelector('meta[name="description"]')?.setAttribute("content", detailCase.detail.description);
+}
 
 fixWidowsInTree(root);
 const typographyObserver = new MutationObserver((mutations) => {

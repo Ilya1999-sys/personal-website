@@ -1,3 +1,5 @@
+import { defaultCaseDetails } from "../../scripts/case-detail-data.js";
+
 export const defaultCategories = [
   { id: "all", label: "Все", position: 1 },
   { id: "uxui", label: "UXUI", position: 2 },
@@ -37,6 +39,14 @@ const caseCopyUpdates = [
 ];
 
 export async function ensurePortfolioData(db) {
+  const { results: caseColumns } = await db.prepare("PRAGMA table_info(cases)").all();
+  if (!caseColumns.some((column) => column.name === "detail_json")) {
+    try { await db.prepare("ALTER TABLE cases ADD COLUMN detail_json TEXT").run(); }
+    catch (error) {
+      const { results: currentColumns } = await db.prepare("PRAGMA table_info(cases)").all();
+      if (!currentColumns.some((column) => column.name === "detail_json")) throw error;
+    }
+  }
   await db.prepare(`CREATE TABLE IF NOT EXISTS case_categories (
     id TEXT PRIMARY KEY NOT NULL,
     label TEXT NOT NULL,
@@ -52,6 +62,18 @@ export async function ensurePortfolioData(db) {
   await db.batch(defaultCategories.map((category) => db.prepare(
     "INSERT OR IGNORE INTO case_categories (id, label, position) VALUES (?, ?, ?)",
   ).bind(category.id, category.label, category.position)));
+
+  const detailRevision = "case-pages-20261024";
+  const detailApplied = await db.prepare("SELECT id FROM portfolio_migrations WHERE id = ?").bind(detailRevision).first();
+  if (!detailApplied) {
+    const count = await db.prepare("SELECT COUNT(*) AS count FROM cases").first();
+    if (count?.count) {
+      await db.batch([
+        ...Object.entries(defaultCaseDetails).map(([id, detail]) => db.prepare("UPDATE cases SET detail_json = ? WHERE id = ? AND detail_json IS NULL").bind(JSON.stringify(detail), id)),
+        db.prepare("INSERT OR IGNORE INTO portfolio_migrations (id) VALUES (?)").bind(detailRevision),
+      ]);
+    }
+  }
 
   const applied = await db.prepare("SELECT id FROM portfolio_migrations WHERE id = ?").bind(caseCopyRevision).first();
   if (!applied) {

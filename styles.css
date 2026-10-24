@@ -738,6 +738,11 @@ h1, h2, h3, h4, p { margin: 0; }
 .case-detail__result h3 { font-family: var(--font-body); font-size: var(--type-t1-size); line-height: var(--type-t1-line); font-weight: 400; }
 .case-detail__result p { max-width: 1200px; font-family: var(--font-heading); font-size: var(--type-h3-size); line-height: var(--type-h3-line); font-weight: 400; }
 
+@media (min-width: 1140px) and (max-width: 1919px) {
+  .case-detail__gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .case-detail__gallery--ads { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 @media (min-width: 768px) and (max-width: 1139px) {
   .case-detail__text-grid { grid-template-columns: minmax(0, 1fr); }
   .case-detail__gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }

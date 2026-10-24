@@ -1,4 +1,5 @@
 import { ensurePortfolioData } from "../../_lib/portfolio-data.js";
+import { validateDetail } from "../../_lib/case-detail.js";
 
 function jsonError(message, status = 400) {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
@@ -9,11 +10,13 @@ function validateCase(value, allowedCategories) {
   const description = String(value?.description || "").trim();
   const image = String(value?.image || "").trim();
   const href = String(value?.href || "").trim();
+  const detail = validateDetail(value?.detail ?? null);
   const featured = value?.featured === true;
   const categories = Array.isArray(value?.categories) ? [...new Set(value.categories.map(String))] : [];
   const tags = Array.isArray(value?.tags) ? value.tags.map((tag) => String(tag).trim()).filter(Boolean) : [];
 
   if (!title || title.length > 160) return { error: "Заголовок обязателен и должен быть короче 160 символов" };
+  if (detail.error) return detail;
   if (!description || description.length > 5000) return { error: "Описание обязательно и должно быть короче 5000 символов" };
   if (!image || image.length > 2048) return { error: "Добавьте обложку проекта" };
   if (categories.some((category) => !allowedCategories.has(category))) return { error: "Выберите допустимые категории" };
@@ -32,7 +35,15 @@ function validateCase(value, allowedCategories) {
     } catch { return { error: "Укажите файл сайта или публичную HTTPS-ссылку на обложку" }; }
   }
 
-  return { value: { title, description, image, href, categories, tags, featured } };
+  return { value: { title, description, image, href: detail.value ? `/cases/${detail.value.slug}/` : href, detail: detail.value, categories, tags, featured } };
+}
+
+async function checkSlug(db, detail, id = "") {
+  if (!detail) return null;
+  const { results } = await db.prepare("SELECT id,detail_json FROM cases WHERE detail_json IS NOT NULL AND id != ?").bind(id).all();
+  return results.some((item) => {
+    try { return JSON.parse(item.detail_json).slug === detail.slug; } catch { return false; }
+  }) ? jsonError("Такой адрес страницы уже занят", 409) : null;
 }
 
 async function checkFeaturedLimit(db, featured, id = "") {
@@ -48,7 +59,7 @@ function checkOrigin(request) {
 
 async function readBody(request) {
   const length = Number(request.headers.get("Content-Length") || 0);
-  if (length > 64_000) throw new Error("Слишком большой запрос");
+  if (length > 1_048_576) throw new Error("Слишком большой запрос");
   return request.json();
 }
 
@@ -63,11 +74,13 @@ export async function onRequestPost({ request, env }) {
   if (validated.error) return jsonError(validated.error);
   const limited = await checkFeaturedLimit(env.DB, validated.value.featured);
   if (limited) return limited;
-  const { title, description, image, href, categories, tags, featured } = validated.value;
+  const duplicate = await checkSlug(env.DB, validated.value.detail);
+  if (duplicate) return duplicate;
+  const { title, description, image, href, detail, categories, tags, featured } = validated.value;
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO cases (id, position, title, description, categories, tags, image, href, featured) VALUES (?, (SELECT COALESCE(MAX(position), -1) + 1 FROM cases), ?, ?, ?, ?, ?, ?, ?)",
-  ).bind(id, title, description, JSON.stringify(categories), JSON.stringify(tags), image, href, featured ? 1 : 0).run();
+    "INSERT INTO cases (id, position, title, description, categories, tags, image, href, detail_json, featured) VALUES (?, (SELECT COALESCE(MAX(position), -1) + 1 FROM cases), ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).bind(id, title, description, JSON.stringify(categories), JSON.stringify(tags), image, href, detail ? JSON.stringify(detail) : null, featured ? 1 : 0).run();
   return Response.json({ id }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
 
@@ -84,10 +97,12 @@ export async function onRequestPut({ request, env }) {
   if (validated.error) return jsonError(validated.error);
   const limited = await checkFeaturedLimit(env.DB, validated.value.featured, id);
   if (limited) return limited;
-  const { title, description, image, href, categories, tags, featured } = validated.value;
+  const duplicate = await checkSlug(env.DB, validated.value.detail, id);
+  if (duplicate) return duplicate;
+  const { title, description, image, href, detail, categories, tags, featured } = validated.value;
   const result = await env.DB.prepare(
-    "UPDATE cases SET title = ?, description = ?, categories = ?, tags = ?, image = ?, href = ?, featured = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-  ).bind(title, description, JSON.stringify(categories), JSON.stringify(tags), image, href, featured ? 1 : 0, id).run();
+    "UPDATE cases SET title = ?, description = ?, categories = ?, tags = ?, image = ?, href = ?, detail_json = ?, featured = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+  ).bind(title, description, JSON.stringify(categories), JSON.stringify(tags), image, href, detail ? JSON.stringify(detail) : null, featured ? 1 : 0, id).run();
   if (!result.meta.changes) return jsonError("Кейс не найден", 404);
   return Response.json({ id }, { headers: { "Cache-Control": "no-store" } });
 }

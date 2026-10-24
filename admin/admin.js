@@ -1,3 +1,5 @@
+import { createDetailEditor } from "./detail-editor.js";
+
 const form = document.querySelector("#case-form");
 const list = document.querySelector("#admin-case-list");
 const status = document.querySelector("#admin-status");
@@ -37,6 +39,8 @@ async function api(url, options = {}) {
   }
   return data;
 }
+
+const detailEditor = createDetailEditor({ api, message });
 
 function showLogin(text = "") {
   cases = [];
@@ -144,7 +148,8 @@ function selectCase(id) {
   editorTitle.textContent = item.title;
   form.elements.title.value = item.title || "";
   form.elements.description.value = item.description || "";
-  form.elements.href.value = item.href || "";
+  detailEditor.setCase(item);
+  form.elements.href.value = detailEditor.getMode() === "external" ? item.href || "" : "";
   form.elements.featured.checked = Boolean(item.featured);
   renderCategoryChecks(item.categories || []);
   form.querySelectorAll('[name="tag"]').forEach((input, index) => { input.value = item.tags?.[index] || ""; });
@@ -160,6 +165,7 @@ function resetForm() {
   selectedId = null;
   editorTitle.textContent = "Новый кейс";
   form.reset();
+  detailEditor.setCase(null);
   renderCategoryChecks([]);
   imageInput.value = "";
   setImage("");
@@ -292,18 +298,21 @@ form.addEventListener("submit", async (event) => {
       title: form.elements.title.value.trim(),
       description: form.elements.description.value.trim(),
       image,
-      href: form.elements.href.value.trim(),
+      href: detailEditor.getMode() === "page" ? "" : form.elements.href.value.trim(),
+      detail: detailEditor.collect(),
       featured: form.elements.featured.checked,
       categories: [...form.querySelectorAll('[name="categories"]:checked')].map((input) => input.value),
       tags: [...form.querySelectorAll('[name="tag"]')].map((input) => input.value.trim()).filter(Boolean),
     };
+    if (!payload.detail && !payload.href) throw new Error("Укажите ссылку на проект или создайте страницу кейса");
     if (selectedId) payload.id = selectedId;
     const saved = await api("/api/admin/cases", { method: selectedId ? "PUT" : "POST", body: JSON.stringify(payload) });
-    const updated = { ...payload, id: saved.id || selectedId };
+    const updated = { ...payload, id: saved.id || selectedId, href: payload.detail ? `/cases/${payload.detail.slug}/` : payload.href };
     if (selectedId) cases = cases.map((item) => item.id === selectedId ? updated : item);
     else cases.push(updated);
     selectedId = updated.id;
     setImage(image);
+    detailEditor.setCase(updated);
     editorTitle.textContent = updated.title;
     deleteButton.hidden = false;
     document.querySelector("#save-case").textContent = "Сохранить изменения";

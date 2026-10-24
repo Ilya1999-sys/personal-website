@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 const SESSION_LIFETIME = 604800;
-const MAX_JSON_BODY = 64000;
+const MAX_JSON_BODY = 1048576;
 const MAX_IMAGE_BYTES = 10485760;
 
 header('Cache-Control: no-store');
@@ -54,17 +54,30 @@ function database(array $config): PDO
             tags TEXT NOT NULL,
             image VARCHAR(2048) NOT NULL,
             href VARCHAR(2048) NOT NULL DEFAULT '',
+            detail_json LONGTEXT NULL,
             featured TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX cases_position_idx (position)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $detailColumnAdded = !$pdo->query("SHOW COLUMNS FROM cases LIKE 'detail_json'")->fetch();
+        if ($detailColumnAdded) {
+            try { $pdo->exec('ALTER TABLE cases ADD COLUMN detail_json LONGTEXT NULL'); }
+            catch (PDOException $error) {
+                if (!$pdo->query("SHOW COLUMNS FROM cases LIKE 'detail_json'")->fetch()) throw $error;
+                $detailColumnAdded = false;
+            }
+        }
         $pdo->exec("CREATE TABLE IF NOT EXISTS case_categories (
             id VARCHAR(80) PRIMARY KEY,
             label VARCHAR(40) NOT NULL,
             position INT NOT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS portfolio_migrations (
+            id VARCHAR(80) PRIMARY KEY,
+            applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         $pdo->exec("CREATE TABLE IF NOT EXISTS admin_login_attempts (
             ip VARCHAR(45) PRIMARY KEY,
@@ -104,7 +117,7 @@ function database(array $config): PDO
                 }
             }
             if (is_array($seed)) {
-                $insert = $pdo->prepare('INSERT IGNORE INTO cases (id,position,title,description,categories,tags,image,href,featured) VALUES (?,?,?,?,?,?,?,?,?)');
+                $insert = $pdo->prepare('INSERT IGNORE INTO cases (id,position,title,description,categories,tags,image,href,detail_json,featured) VALUES (?,?,?,?,?,?,?,?,?,?)');
                 foreach ($seed as $index => $item) {
                     $image = (string) ($item['image'] ?? '');
                     if ($image !== '' && !str_starts_with($image, '/') && !preg_match('~^https://~i', $image)) $image = '/images/' . basename($image);
@@ -113,9 +126,24 @@ function database(array $config): PDO
                         (int) ($item['position'] ?? $index), (string) ($item['title'] ?? ''), (string) ($item['description'] ?? ''),
                         json_encode($item['categories'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                         json_encode($item['tags'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-                        $image, (string) ($item['href'] ?? ''), !empty($item['featured']) ? 1 : 0,
+                        $image, (string) ($item['href'] ?? ''), !empty($item['detail']) ? json_encode($item['detail'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) : null, !empty($item['featured']) ? 1 : 0,
                     ]);
                 }
+            }
+        }
+        if (!$pdo->query("SELECT id FROM portfolio_migrations WHERE id='case-pages-20261024'")->fetch()) {
+            $seedPath = dirname(__DIR__) . '/content/cases.json';
+            $seed = is_file($seedPath) ? json_decode((string) file_get_contents($seedPath), true) : null;
+            if (is_array($seed)) {
+                $updateDetail = $pdo->prepare('UPDATE cases SET detail_json=? WHERE id=? AND detail_json IS NULL');
+                $found = [];
+                foreach ($seed as $item) {
+                    if (!empty($item['detail']) && in_array($item['id'] ?? '', ['case-003', 'case-005'], true)) {
+                        $updateDetail->execute([json_encode($item['detail'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), $item['id']]);
+                        $found[] = $item['id'];
+                    }
+                }
+                if (count(array_unique($found)) === 2) $pdo->exec("INSERT IGNORE INTO portfolio_migrations (id) VALUES ('case-pages-20261024')");
             }
         }
         return $pdo;
@@ -179,6 +207,7 @@ function validCase(array $value, array $allowed): array
     $description = trim((string) ($value['description'] ?? ''));
     $image = trim((string) ($value['image'] ?? ''));
     $href = trim((string) ($value['href'] ?? ''));
+    $detail = validDetail($value['detail'] ?? null);
     $categories = array_values(array_unique(array_map('strval', is_array($value['categories'] ?? null) ? $value['categories'] : [])));
     $tags = array_values(array_filter(array_map(static fn($tag) => trim((string) $tag), is_array($value['tags'] ?? null) ? $value['tags'] : []), static fn($tag) => $tag !== ''));
     if ($title === '' || mb_strlen($title) > 160) fail('Заголовок обязателен и должен быть короче 160 символов');
@@ -189,16 +218,73 @@ function validCase(array $value, array $allowed): array
     if ($href !== '' && (!filter_var($href, FILTER_VALIDATE_URL) || !in_array(strtolower((string) parse_url($href, PHP_URL_SCHEME)), ['https', 'http'], true))) fail('Проверьте ссылку на проект');
     $isLocalImage = preg_match('~^/(images|uploads/cases)/[A-Za-z0-9._-]+$~', $image) === 1;
     if (!$isLocalImage && (!filter_var($image, FILTER_VALIDATE_URL) || parse_url($image, PHP_URL_SCHEME) !== 'https')) fail('Укажите файл сайта или публичную HTTPS-ссылку на обложку');
-    return ['title' => $title, 'description' => $description, 'image' => $image, 'href' => $href, 'categories' => $categories, 'tags' => $tags, 'featured' => ($value['featured'] ?? false) === true];
+    return ['title' => $title, 'description' => $description, 'image' => $image, 'href' => $href, 'detail' => $detail, 'categories' => $categories, 'tags' => $tags, 'featured' => ($value['featured'] ?? false) === true];
+}
+
+function validDetail(mixed $detail): ?array
+{
+    if ($detail === null) return null;
+    if (!is_array($detail)) fail('Проверьте данные страницы кейса');
+    $slug = trim((string) ($detail['slug'] ?? ''));
+    $title = trim((string) ($detail['title'] ?? ''));
+    $description = trim((string) ($detail['description'] ?? ''));
+    $multipleTasks = ($detail['multipleTasks'] ?? false) === true;
+    $tasks = $detail['tasks'] ?? null;
+    if (!preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slug) || strlen($slug) > 80 || $slug === 'detail') fail('Адрес страницы: латиница, цифры и дефисы, до 80 символов');
+    if ($title === '' || mb_strlen($title) > 200 || $description === '' || mb_strlen($description) > 5000) fail('Проверьте заголовок и описание страницы');
+    if (!is_array($tasks) || !array_is_list($tasks) || !$tasks || (!$multipleTasks && count($tasks) !== 1)) fail('Добавьте задачи страницы');
+    $cleanTasks = [];
+    foreach ($tasks as $task) {
+        if (!is_array($task)) fail('Проверьте задачу');
+        $taskTitle = trim((string) ($task['title'] ?? ''));
+        if (($multipleTasks && $taskTitle === '') || mb_strlen($taskTitle) > 200) fail('Проверьте название задачи');
+        $copy = [];
+        foreach (['problem', 'task', 'process', 'result'] as $field) {
+            $copy[$field] = trim((string) ($task[$field] ?? ''));
+            if ($copy[$field] === '' || mb_strlen($copy[$field]) > 10000) fail('Заполните все поля задачи (до 10000 символов каждое)');
+        }
+        $sections = $task['sections'] ?? [];
+        if (!is_array($sections) || !array_is_list($sections)) fail('Проверьте подзадачи');
+        $cleanSections = [];
+        foreach ($sections as $section) {
+            if (!is_array($section)) fail('Проверьте подзадачу');
+            $sectionTitle = trim((string) ($section['title'] ?? ''));
+            $columns = (int) ($section['columns'] ?? 3);
+            if (mb_strlen($sectionTitle) > 200 || !in_array($columns, [3, 4], true)) fail('Проверьте название и число колонок подзадачи');
+            $images = $section['images'] ?? [];
+            $buttons = $section['buttons'] ?? [];
+            if (!is_array($images) || !array_is_list($images) || !is_array($buttons) || !array_is_list($buttons)) fail('Проверьте изображения и кнопки');
+            $cleanImages = [];
+            foreach ($images as $image) {
+                $src = trim((string) ($image['src'] ?? ''));
+                $alt = trim((string) ($image['alt'] ?? ''));
+                if (!preg_match('~^/(?:images(?:/[A-Za-z0-9._-]+)+|uploads/cases/[A-Za-z0-9._-]+)(?:\?v=[A-Za-z0-9._-]+)?$~', $src) || str_contains($src, '..') || mb_strlen($alt) > 300) fail('Проверьте файл изображения');
+                $cleanImages[] = ['src' => $src, 'alt' => $alt];
+            }
+            $cleanButtons = [];
+            foreach ($buttons as $button) {
+                $label = trim((string) ($button['label'] ?? ''));
+                $buttonHref = trim((string) ($button['href'] ?? ''));
+                if ($label === '' || mb_strlen($label) > 120 || !filter_var($buttonHref, FILTER_VALIDATE_URL) || parse_url($buttonHref, PHP_URL_SCHEME) !== 'https') fail('Проверьте название и HTTPS-ссылку кнопки');
+                $cleanButtons[] = ['label' => $label, 'href' => $buttonHref];
+            }
+            if (!$cleanImages && !$cleanButtons) fail('Добавьте изображение или кнопку в подзадачу');
+            $cleanSections[] = ['title' => $sectionTitle, 'columns' => $columns, 'images' => $cleanImages, 'buttons' => $cleanButtons];
+        }
+        $cleanTasks[] = ['title' => $multipleTasks ? $taskTitle : '', ...$copy, 'sections' => $cleanSections];
+    }
+    return ['slug' => $slug, 'title' => $title, 'description' => $description, 'multipleTasks' => $multipleTasks, 'tasks' => $cleanTasks];
 }
 
 function rowsToCases(PDO $db): array
 {
-    $rows = $db->query('SELECT id,title,description,categories,tags,image,href,featured FROM cases ORDER BY position ASC,created_at ASC')->fetchAll();
+    $rows = $db->query('SELECT id,title,description,categories,tags,image,href,detail_json,featured FROM cases ORDER BY position ASC,created_at ASC')->fetchAll();
     foreach ($rows as &$row) {
         $row['categories'] = json_decode((string) $row['categories'], true) ?: [];
         $row['tags'] = json_decode((string) $row['tags'], true) ?: [];
         $row['featured'] = (bool) $row['featured'];
+        $row['detail'] = $row['detail_json'] ? json_decode((string) $row['detail_json'], true) : null;
+        unset($row['detail_json']);
     }
     return $rows;
 }
@@ -287,6 +373,15 @@ try {
             }
             $categoryIds = $db->query("SELECT id FROM case_categories WHERE id <> 'all'")->fetchAll(PDO::FETCH_COLUMN);
             $item = validCase($body, $categoryIds);
+            if ($item['detail']) {
+                $slugPath = '/cases/' . $item['detail']['slug'] . '/';
+                $existing = $db->query('SELECT id,detail_json FROM cases WHERE detail_json IS NOT NULL')->fetchAll();
+                foreach ($existing as $row) {
+                    $other = json_decode((string) $row['detail_json'], true);
+                    if (($other['slug'] ?? '') === $item['detail']['slug'] && ($method !== 'PUT' || $row['id'] !== (string) ($body['id'] ?? ''))) fail('Такой адрес страницы уже занят', 409);
+                }
+                $item['href'] = $slugPath;
+            }
             if ($item['featured']) {
                 $query = $db->prepare('SELECT COUNT(*) FROM cases WHERE featured=1 AND id<>?');
                 $query->execute([$method === 'PUT' ? (string) ($body['id'] ?? '') : '']);
@@ -295,13 +390,13 @@ try {
             if ($method === 'POST') {
                 $id = 'case-' . bin2hex(random_bytes(12));
                 $position = (int) $db->query('SELECT COALESCE(MAX(position),-1)+1 FROM cases')->fetchColumn();
-                $query = $db->prepare('INSERT INTO cases (id,position,title,description,categories,tags,image,href,featured) VALUES (?,?,?,?,?,?,?,?,?)');
-                $query->execute([$id,$position,$item['title'],$item['description'],json_encode($item['categories'],JSON_UNESCAPED_UNICODE),json_encode($item['tags'],JSON_UNESCAPED_UNICODE),$item['image'],$item['href'],$item['featured'] ? 1 : 0]);
+                $query = $db->prepare('INSERT INTO cases (id,position,title,description,categories,tags,image,href,detail_json,featured) VALUES (?,?,?,?,?,?,?,?,?,?)');
+                $query->execute([$id,$position,$item['title'],$item['description'],json_encode($item['categories'],JSON_UNESCAPED_UNICODE),json_encode($item['tags'],JSON_UNESCAPED_UNICODE),$item['image'],$item['href'], $item['detail'] ? json_encode($item['detail'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) : null,$item['featured'] ? 1 : 0]);
             } else {
                 $id = (string) ($body['id'] ?? '');
                 if (!preg_match('/^[a-zA-Z0-9-]{1,80}$/', $id)) fail('Некорректный ID кейса');
-                $query = $db->prepare('UPDATE cases SET title=?,description=?,categories=?,tags=?,image=?,href=?,featured=? WHERE id=?');
-                $query->execute([$item['title'],$item['description'],json_encode($item['categories'],JSON_UNESCAPED_UNICODE),json_encode($item['tags'],JSON_UNESCAPED_UNICODE),$item['image'],$item['href'],$item['featured'] ? 1 : 0,$id]);
+                $query = $db->prepare('UPDATE cases SET title=?,description=?,categories=?,tags=?,image=?,href=?,detail_json=?,featured=? WHERE id=?');
+                $query->execute([$item['title'],$item['description'],json_encode($item['categories'],JSON_UNESCAPED_UNICODE),json_encode($item['tags'],JSON_UNESCAPED_UNICODE),$item['image'],$item['href'],$item['detail'] ? json_encode($item['detail'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) : null,$item['featured'] ? 1 : 0,$id]);
                 if (!$query->rowCount() && !$db->query('SELECT 1 FROM cases WHERE id=' . $db->quote($id))->fetchColumn()) fail('Кейс не найден', 404);
             }
             respond(['id' => $id], $method === 'POST' ? 201 : 200);

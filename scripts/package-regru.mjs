@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteDir = path.resolve(scriptDir, "..");
+const detailSource = await readFile(path.join(siteDir, "scripts", "case-detail-data.js"), "utf8");
+const { defaultCaseDetails } = await import(`data:text/javascript,${encodeURIComponent(detailSource)}`);
 const outputDir = path.resolve(process.argv[2] || path.join(siteDir, "regru-dist"));
 const include = ["index.html", "contacts", "cases", "styles.css", "images", "fonts", "admin", "favicon.svg", "favicon-32.png", "apple-touch-icon.png"];
 
@@ -11,7 +13,7 @@ await rm(outputDir, { recursive: true, force: true });
 await mkdir(outputDir, { recursive: true });
 for (const item of include) await cp(path.join(siteDir, item), path.join(outputDir, item), { recursive: true });
 await mkdir(path.join(outputDir, "scripts"), { recursive: true });
-for (const file of ["site.js", "data.js", "case-pages.js"]) await cp(path.join(siteDir, "scripts", file), path.join(outputDir, "scripts", file));
+for (const file of ["site.js", "data.js", "case-pages.js", "case-detail-data.js"]) await cp(path.join(siteDir, "scripts", file), path.join(outputDir, "scripts", file));
 await mkdir(path.join(outputDir, "api"), { recursive: true });
 await mkdir(path.join(outputDir, "uploads", "cases"), { recursive: true });
 await cp(path.join(siteDir, "regru-backend", "index.php"), path.join(outputDir, "api", "index.php"));
@@ -44,6 +46,11 @@ try {
   };
   console.warn("Cloudflare export не найден: использую кейсы из content/cases.json и категории по умолчанию.");
 }
+initialData.cases = (initialData.cases || []).map((item) => defaultCaseDetails[item.id] && !Object.hasOwn(item, "detail") ? {
+  ...item,
+  href: `/cases/${defaultCaseDetails[item.id].slug}/`,
+  detail: defaultCaseDetails[item.id],
+} : item);
 await writeFile(path.join(outputDir, "api", "initial-data.json"), JSON.stringify(initialData, null, 2) + "\n");
 // The public page uses this snapshot if the PHP API is temporarily unavailable.
 await mkdir(path.join(outputDir, "content"), { recursive: true });

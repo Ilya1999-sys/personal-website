@@ -10,8 +10,8 @@
     <link rel="icon" href="/favicon-32.png?v=20261022-rounded" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261022-rounded" sizes="180x180" />
     <link rel="stylesheet" href="/styles.css?v=20261017-page-gutter" />
-    <link rel="stylesheet" href="/admin/admin.css?v=20261017-tags-admin" />
-    <script type="module" src="/admin/admin.js?v=20261017-tags-admin"></script>
+    <link rel="stylesheet" href="/admin/admin.css?v=20261024-case-template" />
+    <script type="module" src="/admin/admin.js?v=20261024-case-template"></script>
   </head>
   <body class="admin-page">
     <main class="admin-shell">
@@ -41,11 +41,24 @@
           <form id="case-form">
             <label class="admin-field"><span>Заголовок</span><input name="title" maxlength="160" required /></label>
             <label class="admin-field"><span>Описание</span><textarea name="description" rows="5" maxlength="5000" required></textarea></label>
-            <div class="admin-field"><span>Обложка</span><label class="admin-upload" for="image-file"><img id="image-preview" alt="Предпросмотр обложки" hidden /><span id="image-prompt">Выбрать JPG, PNG или WebP до 10 МБ</span><input id="image-file" name="image" type="file" accept="image/jpeg,image/png,image/webp" /></label><label class="admin-field admin-image-url"><span>Или HTTPS-ссылка на изображение</span><input name="imageUrl" type="url" placeholder="https://…" /></label><small class="admin-help">Загрузка файла напрямую включается после подключения хранилища. Пока можно указать публичную HTTPS-ссылку или использовать изображение сайта.</small></div>
+            <div class="admin-field"><span>Обложка</span><label class="admin-upload" for="image-file"><img id="image-preview" alt="Предпросмотр обложки" hidden /><span id="image-prompt">Выбрать JPG, PNG или WebP до 10 МБ</span><input id="image-file" name="image" type="file" accept="image/jpeg,image/png,image/webp" /></label><label class="admin-field admin-image-url"><span>Или HTTPS-ссылка на изображение</span><input name="imageUrl" type="url" placeholder="https://…" /></label><small class="admin-help">Изображение загружается на хостинг при сохранении кейса.</small></div>
             <fieldset class="admin-field admin-categories"><legend>Категории для фильтрации</legend><div class="admin-checks" id="case-category-checks"></div></fieldset>
             <label class="admin-featured"><input name="featured" type="checkbox" /><span><strong>Показывать на главной</strong><small>Одновременно можно выбрать до четырёх кейсов</small></span></label>
             <fieldset class="admin-field admin-tags"><legend>Теги <span>до 5, необязательно</span></legend><div class="admin-tag-inputs"><input name="tag" maxlength="40" aria-label="Тег 1" /><input name="tag" maxlength="40" aria-label="Тег 2" /><input name="tag" maxlength="40" aria-label="Тег 3" /><input name="tag" maxlength="40" aria-label="Тег 4" /><input name="tag" maxlength="40" aria-label="Тег 5" /></div></fieldset>
-            <label class="admin-field"><span>Ссылка на проект <small>необязательно</small></span><input name="href" type="url" placeholder="https://" /></label>
+            <section class="admin-detail-editor" aria-labelledby="destination-title">
+              <h3 id="destination-title">Куда ведёт карточка</h3>
+              <label class="admin-field"><span>Тип перехода</span><select id="case-destination" name="destination"><option value="external">Ссылка на другой сайт</option><option value="page">Отдельная страница кейса</option></select></label>
+              <label class="admin-field" id="case-external-link"><span>Ссылка на проект</span><input name="href" type="url" placeholder="https://" /></label>
+              <div class="admin-detail-fields" id="case-detail-fields" hidden>
+                <div class="admin-detail-fields__heading"><h3>Страница кейса</h3><a id="case-page-preview" target="_blank" rel="noopener noreferrer" hidden>Открыть страницу ↗</a></div>
+                <label class="admin-field"><span>Адрес страницы после /cases/</span><input id="case-page-slug" autocomplete="off" spellcheck="false" placeholder="my-project" pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" /></label>
+                <label class="admin-field"><span>Заголовок страницы</span><input id="case-page-title" maxlength="200" /></label>
+                <label class="admin-field"><span>Описание под заголовком</span><textarea id="case-page-description" rows="4" maxlength="5000"></textarea></label>
+                <label class="admin-featured"><input id="case-multiple-tasks" type="checkbox" /><span><strong>Много задач внутри</strong><small>Если выключено, страница содержит одну общую задачу без названия.</small></span></label>
+                <div id="case-detail-tasks" class="admin-detail-tasks"></div>
+                <button class="admin-add-button" id="add-detail-task" type="button">+ Добавить задачу</button>
+              </div>
+            </section>
             <div class="admin-form-actions"><button class="button button-primary" id="save-case" type="submit">Сохранить кейс</button><p id="form-message" class="form-message" role="status" aria-live="polite"></p></div>
           </form>
           </section>
