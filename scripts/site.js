@@ -1,4 +1,5 @@
 import { categories as staticCategories, contactCards, experience, links, programs } from "./data.js";
+import { caseDetailPage } from "./case-pages.js";
 
 async function loadCases() {
   const apiResponse = await fetch("/api/cases").catch(() => null);
@@ -103,7 +104,8 @@ function makeCaseCard(item, featured = false, index = 0) {
   const tooltipTags = (tooltip.tags || tagNames).slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
   const mobile = item.mobile || item;
   const cardClass = featured ? `featured-card featured-card--${index + 1}` : "case-card";
-  return `<a class="${cardClass}" href="${escapeHtml(item.href || "#")}"${featured && item.mobile ? ` data-desktop-href="${escapeHtml(item.href)}" data-mobile-href="${escapeHtml(mobile.href)}"` : ""} target="_blank" rel="noopener noreferrer" data-featured="${featured}">
+  const internal = item.href?.startsWith("/cases/");
+  return `<a class="${cardClass}" href="${escapeHtml(item.href || "#")}"${internal ? "" : ' target="_blank" rel="noopener noreferrer"'} data-category-ids="${escapeHtml(categoryIds.join(" "))}" data-featured="${featured}">
     <picture>${featured && mobile.image !== item.image ? `<source media="(max-width: 767px)" srcset="${escapeHtml(caseImageSrc(mobile.image))}" />` : ""}<img src="${escapeHtml(caseImageSrc(item.image))}" alt="Обложка проекта: ${title}" loading="${featured && index === 0 ? "eager" : "lazy"}" /></picture>
     ${featured ? `<div class="featured-card__mobile-copy"><h3>${escapeHtml(mobile.title)}</h3><p>${escapeHtml(mobile.description)}</p><div class="tag-list">${[...new Set([...(Array.isArray(mobile.categories) ? mobile.categories : []).map((id) => categories.find((c) => c.id === id)?.label).filter(Boolean), ...(Array.isArray(mobile.tags) ? mobile.tags : [])])].slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div></div>` : ""}
     ${featured ? `<span class="featured-card__label">${title}</span>` : `<div class="case-card__body"><h3>${title}</h3><p>${escapeHtml(item.description)}</p><div class="tag-list">${tags}</div></div>`}
@@ -112,25 +114,11 @@ function makeCaseCard(item, featured = false, index = 0) {
 }
 
 function homePage() {
-  const eventVisual = cases.find((item) => item.id === "case-005") || cases[4];
-  const eventLanding = cases.find((item) => item.id === "case-006") || cases[5];
-  const featured = cases.filter((item) => item.featured).slice(0, 4).map((item) => {
-    if (item.id === "case-003") {
-      return {
-        ...item,
-        image: "featured-loginom.png",
-        mobile: eventVisual,
-        href: eventLanding?.href || item.href,
-        tooltip: {
-          title: "Лендинг мероприятия",
-          description: eventLanding?.description || item.description,
-          tags: ["Веб-дизайн", "Стиль", "Адаптивы"],
-        },
-      };
-    }
-    if (item.id === "case-005") return { ...item, mobile: eventLanding || item };
-    return item;
-  });
+  const featuredOrder = ["case-003", "case-002", "case-005", "case-001"];
+  const featured = featuredOrder.map((id) => cases.find((item) => item.id === id)).filter(Boolean).map((item) => ({
+    ...item,
+    href: item.id === "case-003" ? "/cases/loginom-features/" : item.id === "case-005" ? "/cases/event-visual/" : item.href,
+  }));
   const makeExperienceCard = (entry, extraClass = "") => `<article class="experience-card ${entry.kind === "course" ? "experience-card--course" : ""} ${extraClass}">
       <div class="experience-card__meta"><span>${escapeHtml(entry.company)}</span><span>${escapeHtml(entry.period)}</span></div>
       <h4>${escapeHtml(entry.title)}</h4>
@@ -185,6 +173,15 @@ function homePage() {
 }
 
 function casesPage() {
+  const casesOrder = ["case-003", "case-002", "case-005"];
+  const orderedCases = [...cases].sort((a, b) => {
+    const aRank = casesOrder.indexOf(a.id);
+    const bRank = casesOrder.indexOf(b.id);
+    return (aRank < 0 ? casesOrder.length : aRank) - (bRank < 0 ? casesOrder.length : bRank);
+  }).map((item) => ({
+    ...item,
+    href: item.id === "case-003" ? "/cases/loginom-features/" : item.id === "case-005" ? "/cases/event-visual/" : item.href,
+  }));
   return `<main class="page-content cases-content">
     <section class="page-heading panel">
       ${header()}
@@ -195,7 +192,7 @@ function casesPage() {
     </section>
     <section class="content-section cases-section" aria-label="Проекты">
       <div class="filter-list" role="group" aria-label="Фильтр кейсов">${categories.map(({ id, label }, index) => `<button class="filter-button" type="button" data-filter="${id}" aria-pressed="${index === 0}">${escapeHtml(label)}</button>`).join("")}</div>
-      <div class="case-grid">${cases.map((item) => makeCaseCard(item)).join("")}</div>
+      <div class="case-grid">${orderedCases.map((item) => makeCaseCard(item)).join("")}</div>
       <p class="empty-state" hidden>В этой категории пока нет проектов.</p>
     </section>
     ${footer()}
@@ -218,7 +215,7 @@ function contactsPage() {
   </main>`;
 }
 
-root.innerHTML = page === "cases" ? casesPage() : page === "contacts" ? contactsPage() : homePage();
+root.innerHTML = page === "cases" ? casesPage() : page === "contacts" ? contactsPage() : page === "loginom-case" ? caseDetailPage("loginom", header, footer) : page === "event-case" ? caseDetailPage("event", header, footer) : homePage();
 
 fixWidowsInTree(root);
 const typographyObserver = new MutationObserver((mutations) => {
@@ -233,8 +230,8 @@ document.querySelectorAll(".filter-button").forEach((button) => {
     document.querySelectorAll(".filter-button").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
     const filter = button.dataset.filter;
     let visibleCount = 0;
-    document.querySelectorAll(".case-card").forEach((card, index) => {
-      const matches = filter === "all" || cases[index]?.categories?.includes(filter);
+    document.querySelectorAll(".case-card").forEach((card) => {
+      const matches = filter === "all" || card.dataset.categoryIds.split(" ").includes(filter);
       card.hidden = !matches;
       visibleCount += Number(matches);
     });

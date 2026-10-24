@@ -11,7 +11,7 @@ await rm(outputDir, { recursive: true, force: true });
 await mkdir(outputDir, { recursive: true });
 for (const item of include) await cp(path.join(siteDir, item), path.join(outputDir, item), { recursive: true });
 await mkdir(path.join(outputDir, "scripts"), { recursive: true });
-for (const file of ["site.js", "data.js"]) await cp(path.join(siteDir, "scripts", file), path.join(outputDir, "scripts", file));
+for (const file of ["site.js", "data.js", "case-pages.js"]) await cp(path.join(siteDir, "scripts", file), path.join(outputDir, "scripts", file));
 await mkdir(path.join(outputDir, "api"), { recursive: true });
 await mkdir(path.join(outputDir, "uploads", "cases"), { recursive: true });
 await cp(path.join(siteDir, "regru-backend", "index.php"), path.join(outputDir, "api", "index.php"));
