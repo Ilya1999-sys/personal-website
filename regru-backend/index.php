@@ -2,8 +2,10 @@
 declare(strict_types=1);
 
 const SESSION_LIFETIME = 604800;
-const GOOGLE_LIFETIME = 43200;
-const GOOGLE_CALLBACK = 'https://ilyapolikarpov.ru/api/admin/google/callback';
+const EMAIL_LIFETIME = 43200;
+const EMAIL_CODE_LIFETIME = 600;
+const DEFAULT_ADMIN_EMAIL = 'iliyapolikarpov@gmail.com';
+const DEFAULT_MAIL_FROM = 'no-reply@ilyapolikarpov.ru';
 const MAX_JSON_BODY = 1048576;
 const MAX_IMAGE_BYTES = 10485760;
 
@@ -92,6 +94,13 @@ function database(array $config): PDO
             ip VARCHAR(45) PRIMARY KEY,
             window_started INT NOT NULL,
             attempt_count INT NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $stage = 'create-email-limits';
+        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_email_limits (
+            bucket VARCHAR(100) PRIMARY KEY,
+            window_started INT NOT NULL,
+            request_count INT NOT NULL,
+            last_requested INT NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $stage = 'seed-categories';
         $defaults = [
@@ -193,7 +202,7 @@ function requireOrigin(): void
 
 function requireAdmin(array $config): void
 {
-    requireGoogleAccess($config);
+    requireEmailAccess($config);
     if (empty($_SESSION['portfolio_admin']) || (int) ($_SESSION['portfolio_admin_exp'] ?? 0) <= time()) {
         session_write_close();
         fail('Войдите в админку, чтобы продолжить', 401);
@@ -204,79 +213,118 @@ function requireAdmin(array $config): void
 function startSession(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
-    // Lax lets the browser return the state cookie on Google's top-level GET
-    // callback. Admin mutations still require a same-origin Origin header.
+    // Email verification and password entry both happen on this origin.
     session_name('portfolio_secure_admin');
-    session_set_cookie_params(['lifetime' => SESSION_LIFETIME, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
+    session_set_cookie_params(['lifetime' => SESSION_LIFETIME, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
     ini_set('session.use_strict_mode', '1');
     ini_set('session.gc_maxlifetime', (string) SESSION_LIFETIME);
     session_start();
 }
 
-function googleConfigured(array $config): bool
+function adminEmail(array $config): string
 {
-    foreach (['google_client_id', 'google_client_secret', 'google_admin_email'] as $key) {
-        $value = trim((string) ($config[$key] ?? ''));
-        if ($value === '' || str_starts_with($value, 'YOUR_')) return false;
-    }
-    return filter_var($config['google_admin_email'], FILTER_VALIDATE_EMAIL) !== false;
+    return strtolower(trim((string) ($config['admin_email'] ?? DEFAULT_ADMIN_EMAIL)));
 }
 
-function googleAccess(array $config): bool
+function mailFrom(array $config): string
 {
-    if (!googleConfigured($config)) return false;
+    return strtolower(trim((string) ($config['mail_from'] ?? DEFAULT_MAIL_FROM)));
+}
+
+function emailConfigured(array $config): bool
+{
+    return filter_var(adminEmail($config), FILTER_VALIDATE_EMAIL) !== false
+        && filter_var(mailFrom($config), FILTER_VALIDATE_EMAIL) !== false
+        && preg_match('/^[a-z0-9._%+-]+@[a-z0-9.-]+$/D', mailFrom($config)) === 1
+        && function_exists('mail');
+}
+
+function emailAccess(array $config): bool
+{
+    if (!emailConfigured($config)) return false;
     startSession();
-    return hash_equals(strtolower((string) $config['google_admin_email']), strtolower((string) ($_SESSION['google_email'] ?? '')))
-        && (int) ($_SESSION['google_verified_until'] ?? 0) > time();
+    return hash_equals(adminEmail($config), (string) ($_SESSION['email_verified'] ?? ''))
+        && (int) ($_SESSION['email_verified_until'] ?? 0) > time();
 }
 
-function requireGoogleAccess(array $config): void
+function requireEmailAccess(array $config): void
 {
-    if (!googleConfigured($config)) fail('Вход через Google ещё не настроен', 503);
-    if (!googleAccess($config)) fail('Доступ запрещён', 403);
+    if (!emailConfigured($config)) fail('Почта для входа не настроена', 503);
+    if (!emailAccess($config)) fail('Доступ запрещён', 403);
 }
 
-function adminUnavailable(array $config): never
+function requireEmailForm(): void
 {
-    $ready = googleConfigured($config);
+    startSession();
+    $expected = (string) ($_SESSION['email_csrf'] ?? '');
+    $provided = $_POST['csrf'] ?? null;
+    if ($expected === '' || !is_string($provided) || !hash_equals($expected, $provided)) fail('Запрос отклонён', 403);
+}
+
+function adminUnavailable(array $config, string $notice = ''): never
+{
+    $ready = emailConfigured($config);
     http_response_code($ready ? 403 : 503);
     header('Content-Type: text/html; charset=utf-8');
     header('X-Robots-Tag: noindex, nofollow');
-    header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
-    $action = $ready ? '<a href="/api/admin/google/start">Войти через Google</a>' : '';
-    echo '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Страница недоступна</title><style>body{font:18px/1.5 system-ui,sans-serif;background:#e2e6e7;color:#152442;min-height:100vh;display:grid;place-items:center;margin:0}main{background:#fff;border-radius:24px;padding:40px;max-width:480px;margin:20px}h1{font-size:32px;margin:0 0 12px}a{display:inline-block;margin-top:16px;color:#0647f8}</style><main><h1>Страница недоступна</h1><p>Для доступа к админке подтвердите аккаунт Google.</p>' . $action . '</main></html>';
+    header('X-Frame-Options: DENY');
+    header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'");
+    $action = '';
+    if ($ready) {
+        startSession();
+        if (empty($_SESSION['email_csrf'])) $_SESSION['email_csrf'] = bin2hex(random_bytes(32));
+        $csrf = htmlspecialchars((string) $_SESSION['email_csrf'], ENT_QUOTES, 'UTF-8');
+        $pending = !empty($_SESSION['email_code_hash']) && (int) ($_SESSION['email_code_expires'] ?? 0) > time();
+        $requestLabel = $pending ? 'Отправить новый код' : 'Получить код на почту';
+        if ($pending) {
+            $action .= '<p>Код отправлен на почту. Он действует 10 минут.</p><form method="post" action="/api/admin/email/verify"><input type="hidden" name="csrf" value="' . $csrf . '"><label for="code">Код из письма</label><input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{8}" maxlength="8" required><button type="submit">Продолжить</button></form>';
+        }
+        $action .= '<form method="post" action="/api/admin/email/request"><input type="hidden" name="csrf" value="' . $csrf . '"><button type="submit">' . $requestLabel . '</button></form>';
+    }
+    $message = $notice === '' ? '' : '<p role="status">' . htmlspecialchars($notice, ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Страница недоступна</title><style>body{font:18px/1.5 system-ui,sans-serif;background:#e2e6e7;color:#152442;min-height:100vh;display:grid;place-items:center;margin:0}main{background:#fff;border-radius:24px;padding:40px;max-width:480px;margin:20px}h1{font-size:32px;margin:0 0 12px}form{margin-top:20px}label{display:block}input,button{font:inherit;padding:12px;border-radius:10px;box-sizing:border-box}input{width:100%;border:1px solid #9ca6b8;margin:8px 0}button{background:#0647f8;border:0;color:#fff;cursor:pointer}</style><main><h1>Страница недоступна</h1><p>Для доступа к админке подтвердите адрес электронной почты.</p>' . $message . $action . '</main></html>';
     exit;
 }
 
-function googleRequest(string $url, ?array $post = null, ?string $bearer = null): array
+function reserveEmailRequest(PDO $db): bool
 {
-    if (!function_exists('curl_init')) fail('Вход через Google недоступен на сервере', 503);
-    $curl = curl_init($url);
-    $headers = ['Accept: application/json'];
-    if ($bearer !== null) $headers[] = 'Authorization: Bearer ' . $bearer;
-    if ($post !== null) $headers[] = 'Content-Type: application/x-www-form-urlencoded';
-    curl_setopt_array($curl, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false,
-        CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 15,
-        CURLOPT_HTTPHEADER => $headers,
-        CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
-    ]);
-    if ($post !== null) {
-        curl_setopt($curl, CURLOPT_POST, true);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($post, '', '&', PHP_QUERY_RFC3986));
+    $now = time();
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    $buckets = [['global', 30, 0], ['ip:' . hash('sha256', $ip), 5, 60]];
+    $db->beginTransaction();
+    try {
+        foreach ($buckets as [$bucket, $limit, $cooldown]) {
+            $db->prepare('INSERT IGNORE INTO admin_email_limits (bucket,window_started,request_count,last_requested) VALUES (?,?,0,0)')->execute([$bucket, $now]);
+            $query = $db->prepare('SELECT window_started,request_count,last_requested FROM admin_email_limits WHERE bucket=? FOR UPDATE');
+            $query->execute([$bucket]);
+            $row = $query->fetch();
+            $count = $now - (int) $row['window_started'] >= 3600 ? 0 : (int) $row['request_count'];
+            if ($count >= $limit || $now - (int) $row['last_requested'] < $cooldown) {
+                $db->rollBack();
+                return false;
+            }
+            $db->prepare('UPDATE admin_email_limits SET window_started=?,request_count=?,last_requested=? WHERE bucket=?')
+                ->execute([$count === 0 ? $now : (int) $row['window_started'], $count + 1, $now, $bucket]);
+        }
+        $db->commit();
+        return true;
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $error;
     }
-    $result = curl_exec($curl);
-    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-    curl_close($curl);
-    if (!is_string($result) || $status !== 200 || strlen($result) > 65536) fail('Не удалось подтвердить вход через Google', 502);
-    $decoded = json_decode($result, true);
-    if (!is_array($decoded)) fail('Не удалось подтвердить вход через Google', 502);
-    return $decoded;
+}
+
+function sendEmailCode(array $config, string $code): bool
+{
+    $from = mailFrom($config);
+    $headers = "From: Portfolio <{$from}>\r\nContent-Type: text/plain; charset=UTF-8\r\nX-Auto-Response-Suppress: All";
+    $body = "Код для входа в админку: {$code}\nДействует 10 минут. Если вы не запрашивали код, просто удалите письмо.\n";
+    return mail(adminEmail($config), 'Portfolio admin login code', $body, $headers, '-f' . $from);
 }
 
 function serveAdminFile(string $path, array $config): never
 {
-    if (!googleAccess($config)) adminUnavailable($config);
+    if (!emailAccess($config)) adminUnavailable($config);
     $name = trim(substr($path, strlen('admin')), '/');
     if ($name === '') $name = 'index.html';
     $types = ['index.html' => 'text/html', 'admin.css' => 'text/css', 'admin.js' => 'text/javascript', 'detail-editor.js' => 'text/javascript'];
@@ -386,7 +434,7 @@ function rowsToCases(PDO $db): array
 try {
     if ($path === 'admin' || str_starts_with($path, 'admin/') || str_starts_with($path, 'api/admin/')) {
         if (!isHttps()) {
-            if ($method === 'GET' && ($path === 'admin' || str_starts_with($path, 'admin/') || $path === 'api/admin/google/start')) {
+            if ($method === 'GET' && ($path === 'admin' || str_starts_with($path, 'admin/'))) {
                 header('Location: https://ilyapolikarpov.ru/' . $path, true, 302);
                 exit;
             }
@@ -395,58 +443,37 @@ try {
     }
     if ($path === 'admin' || str_starts_with($path, 'admin/')) serveAdminFile($path, $config);
 
-    if ($path === 'api/admin/google/start' && $method === 'GET') {
-        if (!googleConfigured($config)) fail('Вход через Google ещё не настроен', 503);
-        startSession();
-        $state = bin2hex(random_bytes(32));
-        $verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-        unset($_SESSION['google_email'], $_SESSION['google_verified_until'], $_SESSION['portfolio_admin'], $_SESSION['portfolio_admin_exp']);
-        $_SESSION['google_oauth_state'] = $state;
-        $_SESSION['google_oauth_verifier'] = $verifier;
-        $_SESSION['google_oauth_started'] = time();
-        session_write_close();
-        $params = [
-            'client_id' => (string) $config['google_client_id'],
-            'redirect_uri' => GOOGLE_CALLBACK,
-            'response_type' => 'code',
-            'scope' => 'openid email',
-            'state' => $state,
-            'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='),
-            'code_challenge_method' => 'S256',
-            'prompt' => 'select_account',
-        ];
-        header('Location: https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986), true, 302);
+    if ($path === 'api/admin/email/request' && $method === 'POST') {
+        if (!emailConfigured($config)) adminUnavailable($config);
+        requireEmailForm();
+        if (!emailAccess($config)) {
+            if (!reserveEmailRequest(database($config))) adminUnavailable($config, 'Повторите запрос позже.');
+            $code = str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+            if (!sendEmailCode($config, $code)) adminUnavailable($config, 'Письмо не удалось отправить. Попробуйте позже.');
+            $_SESSION['email_code_hash'] = password_hash($code, PASSWORD_DEFAULT);
+            $_SESSION['email_code_expires'] = time() + EMAIL_CODE_LIFETIME;
+            $_SESSION['email_code_attempts'] = 0;
+        }
+        header('Location: /admin/', true, 303);
         exit;
     }
-    if ($path === 'api/admin/google/callback' && $method === 'GET') {
-        if (!googleConfigured($config)) adminUnavailable($config);
-        startSession();
-        $expected = (string) ($_SESSION['google_oauth_state'] ?? '');
-        $verifier = (string) ($_SESSION['google_oauth_verifier'] ?? '');
-        $started = (int) ($_SESSION['google_oauth_started'] ?? 0);
-        unset($_SESSION['google_oauth_state'], $_SESSION['google_oauth_verifier'], $_SESSION['google_oauth_started']);
-        $state = is_string($_GET['state'] ?? null) ? $_GET['state'] : '';
-        $code = is_string($_GET['code'] ?? null) ? $_GET['code'] : '';
-        if ($expected === '' || !hash_equals($expected, $state) || $verifier === '' || $started < time() - 600 || $code === '' || strlen($code) > 4096) adminUnavailable($config);
-        $token = googleRequest('https://oauth2.googleapis.com/token', [
-            'code' => $code,
-            'client_id' => (string) $config['google_client_id'],
-            'client_secret' => (string) $config['google_client_secret'],
-            'redirect_uri' => GOOGLE_CALLBACK,
-            'grant_type' => 'authorization_code',
-            'code_verifier' => $verifier,
-        ]);
-        $accessToken = (string) ($token['access_token'] ?? '');
-        if ($accessToken === '' || !hash_equals('Bearer', (string) ($token['token_type'] ?? ''))) adminUnavailable($config);
-        $user = googleRequest('https://openidconnect.googleapis.com/v1/userinfo', null, $accessToken);
-        $email = strtolower((string) ($user['email'] ?? ''));
-        if (($user['email_verified'] ?? false) !== true || ($user['sub'] ?? '') === '' || !hash_equals(strtolower((string) $config['google_admin_email']), $email)) adminUnavailable($config);
+    if ($path === 'api/admin/email/verify' && $method === 'POST') {
+        if (!emailConfigured($config)) adminUnavailable($config);
+        requireEmailForm();
+        $code = $_POST['code'] ?? null;
+        $hash = (string) ($_SESSION['email_code_hash'] ?? '');
+        if (!is_string($code) || !preg_match('/^[0-9]{8}$/D', $code) || $hash === '' || (int) ($_SESSION['email_code_expires'] ?? 0) <= time()) adminUnavailable($config, 'Код неверный или срок его действия истёк.');
+        $_SESSION['email_code_attempts'] = (int) ($_SESSION['email_code_attempts'] ?? 0) + 1;
+        if ($_SESSION['email_code_attempts'] > 5) {
+            unset($_SESSION['email_code_hash'], $_SESSION['email_code_expires']);
+            adminUnavailable($config, 'Попытки закончились. Запросите новый код.');
+        }
+        if (!password_verify($code, $hash)) adminUnavailable($config, 'Неверный код.');
         session_regenerate_id(true);
-        $_SESSION['google_email'] = $email;
-        $_SESSION['google_verified_until'] = time() + GOOGLE_LIFETIME;
-        unset($_SESSION['portfolio_admin'], $_SESSION['portfolio_admin_exp']);
+        $_SESSION['email_verified'] = adminEmail($config);
+        $_SESSION['email_verified_until'] = time() + EMAIL_LIFETIME;
+        unset($_SESSION['email_code_hash'], $_SESSION['email_code_expires'], $_SESSION['email_code_attempts'], $_SESSION['portfolio_admin'], $_SESSION['portfolio_admin_exp']);
         session_write_close();
-        header('Referrer-Policy: no-referrer');
         header('Location: /admin/', true, 303);
         exit;
     }
@@ -458,7 +485,7 @@ try {
     }
 
     if ($path === 'api/admin/session' && $method === 'GET') {
-        requireGoogleAccess($config);
+        requireEmailAccess($config);
         if (empty($config['admin_password_hash']) || $config['admin_password_hash'] === 'REPLACE_WITH_PASSWORD_HASH') {
             respond(['authenticated' => false, 'configured' => false], 503);
         }
@@ -471,12 +498,12 @@ try {
         startSession();
         $_SESSION = [];
         session_destroy();
-        setcookie('portfolio_secure_admin', '', ['expires' => time() - 3600, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
+        setcookie('portfolio_secure_admin', '', ['expires' => time() - 3600, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
         respond(null, 204);
     }
     if ($path === 'api/admin/login' && $method === 'POST') {
         requireOrigin();
-        requireGoogleAccess($config);
+        requireEmailAccess($config);
         if (empty($config['admin_password_hash']) || $config['admin_password_hash'] === 'REPLACE_WITH_PASSWORD_HASH') fail('Сначала задайте пароль админки в api/config.php', 503);
         $body = bodyJson();
         $password = (string) ($body['password'] ?? '');

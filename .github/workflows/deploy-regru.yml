@@ -35,6 +35,11 @@ jobs:
       - name: Build the REG.RU web root
         run: node scripts/package-regru.mjs
 
+      - name: Check PHP syntax
+        run: |
+          php -l regru-backend/index.php
+          php -l regru-backend/config.example.php
+
       - name: Check deployment settings
         env:
           FTP_SERVER: ${{ secrets.REGRU_FTP_SERVER }}
