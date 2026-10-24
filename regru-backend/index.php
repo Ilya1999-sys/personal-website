@@ -32,6 +32,7 @@ function fail(string $message, int $status = 400): never
 function database(array $config): PDO
 {
     static $pdo;
+    $stage = 'connect';
     if ($pdo instanceof PDO) return $pdo;
     foreach (['db_host', 'db_name', 'db_user', 'db_password'] as $key) {
         if (!isset($config[$key]) || $config[$key] === '' || str_starts_with((string) $config[$key], 'YOUR_')) {
@@ -45,6 +46,7 @@ function database(array $config): PDO
             $config['db_password'],
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false],
         );
+        $stage = 'create-cases';
         $pdo->exec("CREATE TABLE IF NOT EXISTS cases (
             id VARCHAR(80) PRIMARY KEY,
             position INT NOT NULL,
@@ -60,14 +62,17 @@ function database(array $config): PDO
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX cases_position_idx (position)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $stage = 'check-detail-column';
         $detailColumnAdded = !$pdo->query("SHOW COLUMNS FROM cases LIKE 'detail_json'")->fetch();
         if ($detailColumnAdded) {
+            $stage = 'add-detail-column';
             try { $pdo->exec('ALTER TABLE cases ADD COLUMN detail_json LONGTEXT NULL'); }
             catch (PDOException $error) {
                 if (!$pdo->query("SHOW COLUMNS FROM cases LIKE 'detail_json'")->fetch()) throw $error;
                 $detailColumnAdded = false;
             }
         }
+        $stage = 'create-categories';
         $pdo->exec("CREATE TABLE IF NOT EXISTS case_categories (
             id VARCHAR(80) PRIMARY KEY,
             label VARCHAR(40) NOT NULL,
@@ -75,15 +80,18 @@ function database(array $config): PDO
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $stage = 'create-migrations';
         $pdo->exec("CREATE TABLE IF NOT EXISTS portfolio_migrations (
             id VARCHAR(80) PRIMARY KEY,
             applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $stage = 'create-login-attempts';
         $pdo->exec("CREATE TABLE IF NOT EXISTS admin_login_attempts (
             ip VARCHAR(45) PRIMARY KEY,
             window_started INT NOT NULL,
             attempt_count INT NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $stage = 'seed-categories';
         $defaults = [
             ['all', 'Все', 1], ['uxui', 'UXUI', 2], ['web', 'Веб-дизайн', 3],
             ['creative', 'Креативы', 4], ['motion', 'Моушен', 5], ['article', 'Статьи', 6],
@@ -91,6 +99,7 @@ function database(array $config): PDO
         $insertCategory = $pdo->prepare('INSERT IGNORE INTO case_categories (id,label,position) VALUES (?,?,?)');
         foreach ($defaults as $row) $insertCategory->execute($row);
 
+        $stage = 'seed-cases';
         if ((int) $pdo->query('SELECT COUNT(*) FROM cases')->fetchColumn() === 0) {
             $exportPath = __DIR__ . '/initial-data.json';
             $export = is_file($exportPath) ? json_decode((string) file_get_contents($exportPath), true) : null;
@@ -131,6 +140,7 @@ function database(array $config): PDO
                 }
             }
         }
+        $stage = 'seed-case-details';
         if (!$pdo->query("SELECT id FROM portfolio_migrations WHERE id='case-pages-20261024'")->fetch()) {
             $seedPath = dirname(__DIR__) . '/content/cases.json';
             $seed = is_file($seedPath) ? json_decode((string) file_get_contents($seedPath), true) : null;
@@ -149,7 +159,7 @@ function database(array $config): PDO
         return $pdo;
     } catch (PDOException $error) {
         error_log('Portfolio database error: ' . $error->getMessage());
-        fail('Не удалось подключиться к MySQL или подготовить таблицы. Проверьте настройки базы.', 503);
+        fail('Не удалось подготовить базу. Этап: ' . $stage . ', SQLSTATE: ' . $error->getCode(), 503);
     }
 }
 
