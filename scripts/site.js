@@ -223,6 +223,61 @@ if (page === "case-detail" && detailCase?.detail) {
   document.querySelector('meta[name="description"]')?.setAttribute("content", detailCase.detail.description);
 }
 
+const originalNav = root.querySelector(".site-nav");
+if (originalNav) {
+  const floatingNav = document.createElement("div");
+  floatingNav.className = "floating-nav-shell";
+  floatingNav.setAttribute("aria-hidden", "true");
+  floatingNav.inert = true;
+  floatingNav.append(originalNav.cloneNode(true));
+  document.body.append(floatingNav);
+
+  let originalNavBottom = originalNav.getBoundingClientRect().bottom + window.scrollY;
+  let previousScrollY = window.scrollY;
+  let directionDistance = 0;
+  let previousDirection = 0;
+
+  const setFloatingNavVisible = (visible) => {
+    if (!visible && floatingNav.contains(document.activeElement)) return;
+    if (floatingNav.classList.contains("is-visible") === visible) return;
+    floatingNav.classList.toggle("is-visible", visible);
+    floatingNav.inert = !visible;
+    floatingNav.setAttribute("aria-hidden", String(!visible));
+    originalNav.inert = visible;
+    if (visible) originalNav.setAttribute("aria-hidden", "true");
+    else originalNav.removeAttribute("aria-hidden");
+  };
+
+  const updateFloatingNav = () => {
+    const scrollY = Math.max(0, window.scrollY);
+    const delta = scrollY - previousScrollY;
+    previousScrollY = scrollY;
+
+    if (scrollY <= originalNavBottom + 24) {
+      directionDistance = 0;
+      previousDirection = 0;
+      setFloatingNavVisible(false);
+      return;
+    }
+
+    if (Math.abs(delta) < 2) return;
+    const direction = Math.sign(delta);
+    directionDistance = direction === previousDirection ? directionDistance + Math.abs(delta) : Math.abs(delta);
+    previousDirection = direction;
+
+    if (direction < 0 && directionDistance >= 28) setFloatingNavVisible(true);
+    if (direction > 0 && directionDistance >= 16) setFloatingNavVisible(false);
+  };
+
+  window.addEventListener("scroll", updateFloatingNav, { passive: true });
+  window.addEventListener("resize", () => {
+    originalNavBottom = originalNav.getBoundingClientRect().bottom + window.scrollY;
+    previousScrollY = window.scrollY;
+    updateFloatingNav();
+  });
+  updateFloatingNav();
+}
+
 fixWidowsInTree(root);
 const typographyObserver = new MutationObserver((mutations) => {
   for (const mutation of mutations) {
