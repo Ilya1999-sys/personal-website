@@ -22,10 +22,20 @@
 .admin-list h1, .admin-editor h2 { font-family: var(--font-heading); font-size: 32px; font-weight: 400; }
 .admin-list .button, .admin-form-actions .button { min-height: 44px; padding: 10px 20px; font-size: 14px; }
 .admin-status { margin-bottom: 10px; color: var(--text-tertiary); font-size: 13px; }
+.admin-order-help { margin: 0 0 14px; color: var(--text-tertiary); font-size: 12px; line-height: 1.45; }
+.admin-order-help[data-error="true"] { color: #b42318; }
 .admin-case-list { display: grid; gap: 6px; max-height: 72vh; overflow: auto; }
-.admin-case-item { padding: 12px; border: 1px solid transparent; border-radius: 12px; background: var(--background-1); color: var(--text-primary); text-align: left; cursor: pointer; }
+.admin-case-row { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: stretch; border: 1px solid transparent; border-radius: 12px; background: var(--background-1); }
+.admin-case-row.is-dragging { border-color: var(--accent-1); box-shadow: 0 6px 18px rgb(0 0 0 / 12%); opacity: .84; }
+.admin-case-grip { display: grid; place-items: center; padding: 0; border: 0; border-radius: 12px 0 0 12px; background: transparent; color: var(--text-tertiary); cursor: grab; touch-action: none; }
+.admin-case-grip:active { cursor: grabbing; }
+.admin-case-grip svg { width: 18px; height: 22px; fill: currentColor; }
+.admin-case-grip:hover, .admin-case-grip:focus-visible { color: var(--accent-1); }
+.is-reordering-cases { user-select: none; }
+.admin-case-item { min-width: 0; padding: 12px 12px 12px 2px; border: 1px solid transparent; border-radius: 0 12px 12px 0; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
 .admin-case-item[aria-current="true"] { border-color: var(--accent-1); background: #fff; }
 .admin-case-item span { display: block; color: var(--text-tertiary); font-size: 12px; }
+.admin-case-list[aria-busy="true"] { pointer-events: none; opacity: .65; }
 .admin-editor__heading { align-items: flex-start; margin-bottom: 24px; }
 .admin-eyebrow { margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
 .admin-delete { border: 0; background: transparent; color: #b42318; font: inherit; cursor: pointer; }

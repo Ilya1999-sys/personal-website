@@ -176,12 +176,6 @@ function homePage() {
 }
 
 function casesPage() {
-  const casesOrder = ["case-003", "case-002", "case-005"];
-  const orderedCases = [...cases].sort((a, b) => {
-    const aRank = casesOrder.indexOf(a.id);
-    const bRank = casesOrder.indexOf(b.id);
-    return (aRank < 0 ? casesOrder.length : aRank) - (bRank < 0 ? casesOrder.length : bRank);
-  });
   return `<main class="page-content cases-content">
     <section class="page-heading panel">
       ${header()}
@@ -192,7 +186,7 @@ function casesPage() {
     </section>
     <section class="content-section cases-section" aria-label="Проекты">
       <div class="filter-list" role="group" aria-label="Фильтр кейсов">${categories.map(({ id, label }, index) => `<button class="filter-button" type="button" data-filter="${id}" aria-pressed="${index === 0}">${escapeHtml(label)}</button>`).join("")}</div>
-      <div class="case-grid">${orderedCases.map((item) => makeCaseCard(item)).join("")}</div>
+      <div class="case-grid">${cases.map((item) => makeCaseCard(item)).join("")}</div>
       <p class="empty-state" hidden>В этой категории пока нет проектов.</p>
     </section>
     ${footer()}

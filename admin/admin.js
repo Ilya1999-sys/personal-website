@@ -3,6 +3,7 @@ import { createDetailEditor } from "./detail-editor.js";
 const form = document.querySelector("#case-form");
 const list = document.querySelector("#admin-case-list");
 const status = document.querySelector("#admin-status");
+const orderMessage = document.querySelector("#admin-order-message");
 const formMessage = document.querySelector("#form-message");
 const editorTitle = document.querySelector("#editor-title");
 const deleteButton = document.querySelector("#delete-case");
@@ -23,6 +24,7 @@ let cases = [];
 let categories = [];
 let selectedId = null;
 let currentImage = "";
+let orderSaving = false;
 
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const message = (text, isError = false) => {
@@ -60,10 +62,129 @@ function showAdmin() {
 
 function renderList() {
   const categoryLabels = new Map(categories.map(({ id, label }) => [id, label]));
-  list.innerHTML = cases.map((item) => `<button class="admin-case-item" type="button" data-id="${escapeHtml(item.id)}" aria-current="${item.id === selectedId}">${escapeHtml(item.title)}<span>${item.featured ? "На главной · " : ""}${(item.categories || []).map((id) => categoryLabels.get(id)).filter(Boolean).join(" · ")}</span></button>`).join("");
-  list.querySelectorAll("[data-id]").forEach((button) => button.addEventListener("click", () => selectCase(button.dataset.id)));
+  list.innerHTML = cases.map((item) => `<div class="admin-case-row" data-id="${escapeHtml(item.id)}">
+    <button class="admin-case-grip" type="button" aria-label="Изменить порядок: ${escapeHtml(item.title)}. Перетащите или используйте стрелки вверх и вниз" title="Перетащить или нажать ↑ / ↓"><svg viewBox="0 0 18 22" aria-hidden="true"><circle cx="5" cy="5" r="1.5"/><circle cx="13" cy="5" r="1.5"/><circle cx="5" cy="11" r="1.5"/><circle cx="13" cy="11" r="1.5"/><circle cx="5" cy="17" r="1.5"/><circle cx="13" cy="17" r="1.5"/></svg></button>
+    <button class="admin-case-item" type="button" aria-current="${item.id === selectedId}">${escapeHtml(item.title)}<span>${item.featured ? "На главной · " : ""}${(item.categories || []).map((id) => categoryLabels.get(id)).filter(Boolean).map(escapeHtml).join(" · ")}</span></button>
+  </div>`).join("");
+  list.querySelectorAll(".admin-case-item").forEach((button) => button.addEventListener("click", () => selectCase(button.closest("[data-id]").dataset.id)));
   status.textContent = `${cases.length} ${cases.length === 1 ? "кейс" : "кейсов"}`;
 }
+
+function setOrderMessage(text, isError = false) {
+  orderMessage.textContent = text;
+  orderMessage.dataset.error = String(isError);
+}
+
+async function saveCaseOrder(focusId) {
+  if (orderSaving) return;
+  const ids = [...list.querySelectorAll(".admin-case-row")].map((row) => row.dataset.id);
+  if (ids.every((id, index) => id === cases[index]?.id)) return;
+  orderSaving = true;
+  list.setAttribute("aria-busy", "true");
+  setOrderMessage("Сохраняю порядок…");
+  try {
+    await api("/api/admin/cases/order", { method: "PUT", body: JSON.stringify({ ids }) });
+    const caseById = new Map(cases.map((item) => [item.id, item]));
+    cases = ids.map((id) => caseById.get(id));
+    setOrderMessage("Порядок сохранён. Карточки на странице «Кейсы» уже переставлены.");
+  } catch (error) {
+    renderList();
+    list.querySelectorAll(".admin-case-row").forEach((row) => {
+      if (row.dataset.id === focusId) row.querySelector(".admin-case-grip")?.focus();
+    });
+    setOrderMessage(error.message || "Не удалось сохранить порядок", true);
+  } finally {
+    orderSaving = false;
+    list.removeAttribute("aria-busy");
+  }
+}
+
+let draggedCase = null;
+let autoScrollFrame = 0;
+
+function placeDraggedCase() {
+  if (!draggedCase?.started) return;
+  const { row, x, y } = draggedCase;
+  const bounds = list.getBoundingClientRect();
+  if (x < bounds.left || x > bounds.right || y < bounds.top - 24 || y > bounds.bottom + 24) return;
+  const otherRows = [...list.querySelectorAll(".admin-case-row")].filter((item) => item !== row);
+  const before = otherRows.find((item) => y < item.getBoundingClientRect().top + item.getBoundingClientRect().height / 2) || null;
+  if (row.nextElementSibling !== before) list.insertBefore(row, before);
+}
+
+function autoScrollCases() {
+  if (!draggedCase?.started) return;
+  const bounds = list.getBoundingClientRect();
+  if (draggedCase.x >= bounds.left && draggedCase.x <= bounds.right) {
+    if (draggedCase.y < bounds.top + 36) list.scrollTop -= 14;
+    else if (draggedCase.y > bounds.bottom - 36) list.scrollTop += 14;
+    placeDraggedCase();
+  }
+  autoScrollFrame = requestAnimationFrame(autoScrollCases);
+}
+
+function stopDraggingCase() {
+  window.removeEventListener("pointermove", moveDraggedCase);
+  window.removeEventListener("pointerup", dropDraggedCase);
+  window.removeEventListener("pointercancel", cancelDraggedCase);
+  cancelAnimationFrame(autoScrollFrame);
+  autoScrollFrame = 0;
+  draggedCase?.row.classList.remove("is-dragging");
+  document.body.classList.remove("is-reordering-cases");
+}
+
+function moveDraggedCase(event) {
+  if (!draggedCase || event.pointerId !== draggedCase.pointerId) return;
+  draggedCase.x = event.clientX;
+  draggedCase.y = event.clientY;
+  if (!draggedCase.started && Math.abs(event.clientY - draggedCase.startY) < 6) return;
+  if (!draggedCase.started) {
+    draggedCase.started = true;
+    draggedCase.row.classList.add("is-dragging");
+    document.body.classList.add("is-reordering-cases");
+    autoScrollFrame = requestAnimationFrame(autoScrollCases);
+  }
+  event.preventDefault();
+  placeDraggedCase();
+}
+
+function dropDraggedCase(event) {
+  if (!draggedCase || event.pointerId !== draggedCase.pointerId) return;
+  const { started, id } = draggedCase;
+  stopDraggingCase();
+  draggedCase = null;
+  if (started) void saveCaseOrder(id);
+}
+
+function cancelDraggedCase(event) {
+  if (!draggedCase || event.pointerId !== draggedCase.pointerId) return;
+  stopDraggingCase();
+  draggedCase = null;
+  renderList();
+}
+
+list.addEventListener("pointerdown", (event) => {
+  const grip = event.target.closest(".admin-case-grip");
+  if (!grip || draggedCase || orderSaving || (event.pointerType === "mouse" && event.button !== 0)) return;
+  event.preventDefault();
+  const row = grip.closest(".admin-case-row");
+  draggedCase = { row, id: row.dataset.id, pointerId: event.pointerId, startY: event.clientY, x: event.clientX, y: event.clientY, started: false };
+  window.addEventListener("pointermove", moveDraggedCase, { passive: false });
+  window.addEventListener("pointerup", dropDraggedCase);
+  window.addEventListener("pointercancel", cancelDraggedCase);
+});
+
+list.addEventListener("keydown", (event) => {
+  const grip = event.target.closest(".admin-case-grip");
+  if (!grip || orderSaving || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const row = grip.closest(".admin-case-row");
+  const other = event.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+  if (!other) return;
+  if (event.key === "ArrowUp") list.insertBefore(row, other);
+  else list.insertBefore(other, row);
+  void saveCaseOrder(row.dataset.id);
+});
 
 function renderCategoryChecks(selected = []) {
   categoryChecks.innerHTML = categories.filter(({ id }) => id !== "all").map(({ id, label }) => `<label><input type="checkbox" name="categories" value="${escapeHtml(id)}" ${selected.includes(id) ? "checked" : ""} /> ${escapeHtml(label)}</label>`).join("");

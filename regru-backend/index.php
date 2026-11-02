@@ -167,6 +167,17 @@ function database(array $config): PDO
                 if (count(array_unique($found)) === 2) $pdo->exec("INSERT IGNORE INTO portfolio_migrations (id) VALUES ('case-pages-20261024')");
             }
         }
+        $stage = 'seed-case-order';
+        if (!$pdo->query("SELECT id FROM portfolio_migrations WHERE id='case-order-20261102'")->fetch()) {
+            $existingOrder = $pdo->query('SELECT id FROM cases ORDER BY position ASC,created_at ASC')->fetchAll(PDO::FETCH_COLUMN);
+            $firstIds = ['case-003', 'case-002', 'case-005'];
+            $orderedIds = array_merge(array_values(array_filter($firstIds, static fn($id) => in_array($id, $existingOrder, true))), array_values(array_diff($existingOrder, $firstIds)));
+            $pdo->beginTransaction();
+            $updatePosition = $pdo->prepare('UPDATE cases SET position=? WHERE id=?');
+            foreach ($orderedIds as $index => $id) $updatePosition->execute([$index, $id]);
+            $pdo->exec("INSERT IGNORE INTO portfolio_migrations (id) VALUES ('case-order-20261102')");
+            $pdo->commit();
+        }
         return $pdo;
     } catch (PDOException $error) {
         error_log('Portfolio database error at ' . $stage . ': ' . $error->getMessage());
@@ -550,6 +561,27 @@ try {
             $filename = 'cases_' . bin2hex(random_bytes(16)) . '.' . $extension;
             if (!move_uploaded_file($file['tmp_name'], $directory . '/' . $filename)) fail('Не удалось сохранить изображение', 500);
             respond(['image' => '/uploads/cases/' . $filename], 201);
+        }
+
+        if ($path === 'api/admin/cases/order' && $method === 'PUT') {
+            $ids = bodyJson()['ids'] ?? null;
+            if (!is_array($ids) || array_values($ids) !== $ids) fail('Некорректный порядок кейсов');
+            foreach ($ids as $id) if (!is_string($id) || !preg_match('/^[a-zA-Z0-9-]{1,80}$/D', $id)) fail('Некорректный ID кейса');
+            if (count($ids) !== count(array_unique($ids))) fail('Некорректный порядок кейсов');
+            $db->beginTransaction();
+            $current = $db->query('SELECT id FROM cases FOR UPDATE')->fetchAll(PDO::FETCH_COLUMN);
+            $currentSorted = $current;
+            $idsSorted = $ids;
+            sort($currentSorted);
+            sort($idsSorted);
+            if ($currentSorted !== $idsSorted) {
+                $db->rollBack();
+                fail('Список кейсов изменился. Обновите страницу и повторите попытку', 409);
+            }
+            $update = $db->prepare('UPDATE cases SET position=? WHERE id=?');
+            foreach ($ids as $index => $id) $update->execute([$index, $id]);
+            $db->commit();
+            respond(['ok' => true]);
         }
 
         if ($path === 'api/admin/cases' && in_array($method, ['POST', 'PUT', 'DELETE'], true)) {

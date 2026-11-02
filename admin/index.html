@@ -10,8 +10,8 @@
     <link rel="icon" href="/favicon-32.png?v=20261022-rounded" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261022-rounded" sizes="180x180" />
     <link rel="stylesheet" href="/styles.css?v=20261017-page-gutter" />
-    <link rel="stylesheet" href="/admin/admin.css?v=20261024-case-template" />
-    <script type="module" src="/admin/admin.js?v=20261024-case-template"></script>
+    <link rel="stylesheet" href="/admin/admin.css?v=20261102-case-order" />
+    <script type="module" src="/admin/admin.js?v=20261102-case-order"></script>
   </head>
   <body class="admin-page">
     <main class="admin-shell">
@@ -34,6 +34,7 @@
           <aside class="admin-list panel" aria-label="Список кейсов">
           <div class="admin-list__heading"><h1>Кейсы</h1><button class="button button-primary" id="add-case" type="button">Добавить</button></div>
           <p class="admin-status" id="admin-status" role="status" aria-live="polite">Загружаю кейсы…</p>
+          <p class="admin-order-help" id="admin-order-message" role="status" aria-live="polite">Перетащите кейс за значок слева, чтобы изменить порядок на странице «Кейсы». Можно также использовать клавиши ↑ и ↓.</p>
           <div class="admin-case-list" id="admin-case-list"></div>
         </aside>
         <section class="admin-editor panel" aria-labelledby="editor-title">
